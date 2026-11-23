@@ -20,5 +20,12 @@
   },
   "flavors": {
     "camelot": {}
+  },
+  "publish": {
+    "changelog": "CHANGELOG.md",
+    "targets": {
+      "curseforge": { "type": "curseforge", "project-id": 0, "enabled": false },
+      "github": { "type": "github", "repository": "theliahh/QuickCrate" }
+    }
   }
 }

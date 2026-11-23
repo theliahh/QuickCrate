@@ -37,3 +37,27 @@ wowlua dev
 ```
 
 `wowlua dev` installs the addon into the game's `AddOns/QuickCrate` folder and rebuilds it on every save. `/reload` in game to pick up changes.
+
+## Releasing
+
+GitHub Actions (`.github/workflows/ci.yml`) checks, tests and builds every push to `main` and every pull request. When a `v*` tag is pushed, it also runs `wowlua publish`, which uploads the release to every enabled target in `wowlua.json` under `publish.targets`. The release notes are the section of `CHANGELOG.md` whose heading matches the version.
+
+1. Set `package.version` in `wowlua.json`, and add a `## <version>` section to `CHANGELOG.md`.
+2. Commit, then tag and push. The tag must match the version, or the build stops:
+
+   ```sh
+   git tag v0.2.0
+   git push origin main v0.2.0
+   ```
+
+A tag containing `alpha` or `beta` is uploaded as that release type. Any other tag is a full release.
+
+`wowlua publish --dry-run` builds and packages everything and shows what each site would receive, without uploading. The zip goes to `dist/packages/`. It contains only the generated TOC, the bundled Lua and a license notice: no docs, tests or source files.
+
+### CurseForge setup
+
+The `curseforge` target is a placeholder and is turned off. To turn it on:
+
+1. Create the project on CurseForge and copy its project ID from the project page.
+2. In `wowlua.json`, set the target's `project-id` to that number and remove `"enabled": false`.
+3. Create an API token at <https://legacy.curseforge.com/account/api-tokens>, and add it to the GitHub repository's secrets as `CF_API_TOKEN` (Settings → Secrets and variables → Actions).
