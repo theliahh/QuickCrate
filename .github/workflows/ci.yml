@@ -17,6 +17,8 @@ jobs:
         with:
           path: ~/.wowlua/cache
           key: wowlua-${{ hashFiles('wowlua.lock') }}
+      # The gallery tests take screenshots, which need a GPU; lavapipe is a software one.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers
       - run: wowlua check --locked --message-format github
       - run: wowlua test --locked --message-format github
       - run: wowlua build --release --locked
