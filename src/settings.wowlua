@@ -1,0 +1,93 @@
+-- The cogwheel in QuickCrate's title bar and the small settings window it
+-- opens. The settings window holds no secure buttons, so it works in combat.
+import onLoad from "wowlua:lifecycle"
+import SKINS, activeSkin from "/skins"
+import frame, overlay, closeButton, setSkin, showChrome, styleTitle, ink from "/window"
+
+const WIDTH = 210
+const HEIGHT = 96
+
+--- The settings window, beside the main window.
+export const settings = CreateFrame("Frame", "QuickCrateSettings", frame)
+settings:SetSize(WIDTH, HEIGHT)
+settings:SetPoint("TOPLEFT", frame, "TOPRIGHT", 4, 0)
+settings:SetFrameStrata("DIALOG")
+settings:EnableMouse(true)
+settings:Hide()
+
+local settingsOverlay = CreateFrame("Frame", nil, settings)
+settingsOverlay:SetAllPoints()
+settingsOverlay:SetFrameLevel(700)
+
+local title = settingsOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+title:SetText("Settings")
+
+local label = settingsOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+label:SetText("Skin")
+
+--- Lists the skins; the checked one is the player's.
+export const dropdown: any = CreateFrame("DropdownButton", nil, settingsOverlay, "WowStyle1DropdownTemplate")
+dropdown:SetWidth(140)
+
+local chromes: { [string]: any[] } = {}
+
+--- Gives the settings window the player's skin.
+local function dress()
+    local skin = activeSkin()
+    showChrome(settings, settingsOverlay, chromes, skin)
+    styleTitle(title, skin)
+    ink(label, skin)
+    label:ClearAllPoints()
+    label:SetPoint("TOPLEFT", skin.side + skin.headerX, -(skin.top + 4))
+    dropdown:ClearAllPoints()
+    dropdown:SetPoint("LEFT", label, "RIGHT", 10, 0)
+end
+
+--- The skin choices as the dropdown shows them: name and id, in order.
+export function skinOptions(): { [number]: string }[]
+    local options: { [number]: string }[] = {}
+    for _, skin in ipairs(SKINS) do
+        options[#options + 1] = { skin.name, skin.id }
+    end
+    return options
+end
+
+--- What the dropdown does when the player picks a skin.
+export function pickSkin(id: string)
+    setSkin(id)
+    dress()
+    dropdown:GenerateMenu()
+end
+
+local function isSelected(id: string): boolean
+    return activeSkin().id == id
+end
+
+-- The menu reads the saved skin as it builds, so it waits for saved variables.
+@onLoad
+local function buildMenu()
+    local radioMenu: any = MenuUtil.CreateRadioMenu
+    radioMenu(dropdown, isSelected, pickSkin, unpack(skinOptions()))
+end
+
+--- The cogwheel next to the close button.
+export const cog = CreateFrame("Button", nil, overlay)
+cog:SetSize(20, 20)
+cog:SetPoint("RIGHT", closeButton, "LEFT", 0, 0)
+cog:SetNormalAtlas("questlog-icon-setting")
+cog:SetHighlightAtlas("questlog-icon-setting", "ADD")
+cog:SetScript("OnClick", function()
+    if settings:IsShown() then
+        settings:Hide()
+    else
+        dress()
+        dropdown:GenerateMenu()
+        settings:Show()
+    end
+end)
+cog:SetScript("OnEnter", function(self: Button)
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:SetText("Settings")
+    GameTooltip:Show()
+end)
+cog:SetScript("OnLeave", function() GameTooltip:Hide() end)
