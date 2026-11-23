@@ -23,6 +23,10 @@ settingsOverlay:SetFrameLevel(700)
 local title = settingsOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 title:SetText("Settings")
 
+--- Closes the settings window and leaves the main window open.
+export const settingsClose = CreateFrame("Button", nil, settingsOverlay, "UIPanelCloseButton")
+settingsClose:SetScript("OnClick", function() settings:Hide() end)
+
 local label = settingsOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 label:SetText("Skin")
 
@@ -37,6 +41,8 @@ local function dress()
     local skin = activeSkin()
     settings:SetSize(CONTENT_WIDTH + 2 * skin.side, math.max(skin.top + CONTENT_HEIGHT + skin.bottom, skin.minHeight))
     showChrome(settings, settingsOverlay, chromes, skin)
+    settingsClose:ClearAllPoints()
+    settingsClose:SetPoint("TOPRIGHT", skin.closeX, skin.closeY)
     styleTitle(title, skin)
     ink(label, skin)
     label:ClearAllPoints()

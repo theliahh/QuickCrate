@@ -1,0 +1,64 @@
+import test, beforeEach, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+import frame, setSkin from "/window"
+import settings, cog, settingsClose, pickSkin from "/settings"
+import SKINS from "/skins"
+
+local function inUISpecialFrames(name: string): boolean
+    for _, n in ipairs(UISpecialFrames) do
+        if n == name then
+            return true
+        end
+    end
+    return false
+end
+
+@beforeEach
+local function setup()
+    mock.defineItem(248683, { name = "Waylaid Crate: Apprentice Ore" })
+    mock.setBag(0, { slots = 16, items = { [1] = 248683 } })
+    setSkin("metal")
+    if not frame:IsShown() then
+        mock.slash("/qc")
+    end
+    if settings:IsShown() then
+        mock.click(cog)
+    end
+end
+
+@test("the settings window's X closes it and leaves the main window open")
+local function settingsX()
+    mock.click(cog)
+    expect(settings).toBeShown()
+    mock.click(settingsClose)
+    expect(settings).never.toBeShown()
+    expect(frame).toBeShown()
+end
+
+@test("in every skin the settings window's X stays inside it")
+local function settingsXInside()
+    mock.click(cog)
+    for _, skin in ipairs(SKINS) do
+        pickSkin(skin.id)
+        mock.nextFrame()
+        expect(settingsClose:GetRight() <= settings:GetRight()).toBe(true)
+        expect(settingsClose:GetTop() <= settings:GetTop()).toBe(true)
+    end
+end
+
+@test("Esc closes the whole window instead of opening the game menu")
+local function escCloses()
+    mock.click(cog)
+    mock.pressKey("ESCAPE")
+    expect(frame).never.toBeShown()
+    expect(settings).never.toBeVisible()
+    expect(GameMenuFrame).never.toBeShown()
+end
+
+@test("in combat Esc leaves the window alone, and works again after combat")
+local function escCombat()
+    mock.player:enterCombat()
+    expect(inUISpecialFrames("QuickCrateFrame")).toBe(false)
+    mock.player:leaveCombat()
+    expect(inUISpecialFrames("QuickCrateFrame")).toBe(true)
+end

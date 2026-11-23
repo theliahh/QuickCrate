@@ -2,7 +2,7 @@
 -- with a line saying what the next fill uses and secure Fill / Receipt buttons.
 import onLoad from "wowlua:lifecycle"
 import print from "wowlua:log"
-import defer from "wowlua:combat"
+import defer, onCombatChange from "wowlua:combat"
 import RECEIPT_ID from "/data"
 import scan, itemName from "/inventory"
 import type CrateRow, ManualRow, Model from "/inventory"
@@ -455,3 +455,23 @@ export function afterCombat()
 end
 
 closeButton:SetScript("OnClick", close)
+
+-- Esc closes the window, as Blizzard's own panels do. Hiding a window with
+-- secure buttons is blocked in combat, so it leaves Esc's list while fighting.
+const FRAME_NAME = "QuickCrateFrame"
+
+local function setEscCloses(on: boolean)
+    for i = #UISpecialFrames, 1, -1 do
+        if UISpecialFrames[i] == FRAME_NAME then
+            table.remove(UISpecialFrames, i)
+        end
+    end
+    if on then
+        table.insert(UISpecialFrames, FRAME_NAME)
+    end
+end
+
+setEscCloses(not InCombatLockdown())
+onCombatChange(function(entering: boolean)
+    setEscCloses(not entering)
+end)
