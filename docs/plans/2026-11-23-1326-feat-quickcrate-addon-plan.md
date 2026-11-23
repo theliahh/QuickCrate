@@ -264,7 +264,7 @@ Deferred to implementation. U1's probe answers them. Answers from the first in-g
 
 - Bags: the Forever client has a reagent bag (bag 5), and crates and materials can sit there. QuickCrate scans the backpack through `NUM_TOTAL_EQUIPPED_BAG_SLOTS`.
 - Fill flow: using a crate does not fill it on its own. The game then waits for the material to be picked. The one-click Fill (crate plus `target-item`) fills the crate in game, so the "Put in" second click is only a fallback (see KTD4).
-- Receipt: item 262902's use spell is "Forge Delivery Receipt" (1269600), which suggests it applies by targeting the crate, as KTD5 assumes. Not yet confirmed in game.
+- Receipt: confirmed in game. One Receipt click casts "Forge Delivery Receipt" (1269600) on the targeted crate and gives a new item, Notarized Shipping Container, with no targeting cursor (KTD5 holds). The notarized container is a different item, so it never counts as an unfilled crate.
 
 Still open:
 
