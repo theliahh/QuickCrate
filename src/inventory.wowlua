@@ -1,0 +1,131 @@
+-- Reads the bags and works out, for each Waylaid Crate, which bundle the next
+-- fill will use or what is still missing. Pure logic: no frames.
+import CRATES, RECEIPT_ID, FALLBACK_NAMES from "/data"
+import type Bundle from "/data"
+
+export type Slot = { bag: number, slot: number }
+export type Shortfall = { item: number, count: number, missing: number }
+
+export type CrateRow = {
+    id: number,
+    name: string,
+    count: number,
+    slots: Slot[],
+    -- the bundle the next fill uses, nil when the bags cover none
+    bundle: Bundle?,
+    -- when no bundle is covered: the one closest to complete
+    closest: Shortfall?,
+}
+
+export type ManualRow = { id: number, name: string, count: number }
+
+export type Model = {
+    crates: CrateRow[],
+    manual: ManualRow[],
+    receipts: number,
+    receiptSlots: Slot[],
+}
+
+const LAST_BAG = NUM_BAG_SLOTS ?? 4
+
+--- The item's name from the client, or the English fallback while it loads.
+export function itemName(id: number): string
+    local name = C_Item.GetItemNameByID(id)
+    if name ~= nil and name ~= "" then
+        return name
+    end
+    return FALLBACK_NAMES[id] ?? CRATES[id]?.name ?? `item {id}`
+end
+
+local sortedCrateIDs: number[] = {}
+for id in pairs(CRATES) do
+    sortedCrateIDs[#sortedCrateIDs + 1] = id
+end
+table.sort(sortedCrateIDs)
+
+--- The first bundle, in game order, the counts fully cover.
+local function coveredBundle(bundles: Bundle[], counts: { [number]: number }): Bundle?
+    for _, b in ipairs(bundles) do
+        if (counts[b.item] ?? 0) >= b.count then
+            return b
+        end
+    end
+    return nil
+end
+
+--- The bundle with the fewest items missing; ties go to game order.
+local function closestBundle(bundles: Bundle[], counts: { [number]: number }): Shortfall?
+    local best: Shortfall? = nil
+    for _, b in ipairs(bundles) do
+        local missing = b.count - (counts[b.item] ?? 0)
+        if best == nil or missing < best.missing then
+            best = { item = b.item, count = b.count, missing = missing }
+        end
+    end
+    return best
+end
+
+export function scan(): Model
+    local counts: { [number]: number } = {}
+    local slotsByID: { [number]: Slot[] } = {}
+    local receiptSlots: Slot[] = {}
+
+    for bag = 0, LAST_BAG do
+        for slot = 1, C_Container.GetContainerNumSlots(bag) do
+            local info = C_Container.GetContainerItemInfo(bag, slot)
+            if info ~= nil and info.itemID ~= nil then
+                local id = info.itemID
+                counts[id] = (counts[id] ?? 0) + (info.stackCount ?? 1)
+                local list = slotsByID[id]
+                if list == nil then
+                    list = {}
+                    slotsByID[id] = list
+                end
+                list[#list + 1] = { bag = bag, slot = slot }
+                if id == RECEIPT_ID then
+                    receiptSlots[#receiptSlots + 1] = { bag = bag, slot = slot }
+                end
+            end
+        end
+    end
+
+    local crates: CrateRow[] = {}
+    for _, id in ipairs(sortedCrateIDs) do
+        local slots = slotsByID[id]
+        if slots ~= nil then
+            local bundles = CRATES[id].bundles
+            local bundle = coveredBundle(bundles, counts)
+            crates[#crates + 1] = {
+                id = id,
+                name = itemName(id),
+                count = counts[id],
+                slots = slots,
+                bundle = bundle,
+                closest = bundle == nil and closestBundle(bundles, counts) or nil,
+            }
+        end
+    end
+
+    local manual: ManualRow[] = {}
+    for id, _ in pairs(slotsByID) do
+        if CRATES[id] == nil and id ~= RECEIPT_ID then
+            local name = itemName(id)
+            if name:sub(1, 7) == "Waylaid" then
+                manual[#manual + 1] = { id = id, name = name, count = counts[id] }
+            end
+        end
+    end
+    table.sort(manual, function(a: ManualRow, b: ManualRow): boolean return a.id < b.id end)
+
+    return {
+        crates = crates,
+        manual = manual,
+        receipts = counts[RECEIPT_ID] ?? 0,
+        receiptSlots = receiptSlots,
+    }
+end
+
+--- Whether the item is one QuickCrate acts on: a known crate or a receipt.
+export function isTracked(id: number?): boolean
+    return id ~= nil and (CRATES[id] ~= nil or id == RECEIPT_ID)
+end

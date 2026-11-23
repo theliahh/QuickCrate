@@ -1,0 +1,24 @@
+{
+  "$schema": "https://raw.githubusercontent.com/DomenikIrrgang/wowlua/main/schema/wowlua-0.1.json",
+  "package": {
+    "name": "quick-crate",
+    "version": "0.1.0",
+    "authors": [
+      "Theliahh"
+    ],
+    "wowlua": "^0.13"
+  },
+  "addon": {
+    "title": "QuickCrate",
+    "notes": "One-click filling of Waylaid Crates and applying Forged Delivery Receipts. /qc",
+    "author": "Theliahh",
+    "icon-texture": "Interface\\Icons\\INV_Crate_02",
+    "saved-variables": ["QuickCrateDB"]
+  },
+  "test": {
+    "blizzard-ui": true
+  },
+  "flavors": {
+    "camelot": {}
+  }
+}

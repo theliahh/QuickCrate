@@ -1,0 +1,112 @@
+import test, beforeEach, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+import scan from "/inventory"
+import CRATES from "/data"
+
+const APPRENTICE_ORE = 248683
+const APPRENTICE_TEXTILES = 248684
+const COPPER_ORE = 2770
+const TIN_ORE = 2771
+const LINEN_CLOTH = 2589
+const RECEIPT = 262902
+
+@beforeEach
+local function emptyBags()
+    mock.defineItem(APPRENTICE_ORE, { name = "Waylaid Crate: Apprentice Ore" })
+    mock.defineItem(APPRENTICE_TEXTILES, { name = "Waylaid Crate: Apprentice Textiles" })
+    mock.defineItem(COPPER_ORE, { name = "Copper Ore", stackCount = 20 })
+    mock.defineItem(TIN_ORE, { name = "Tin Ore", stackCount = 20 })
+    mock.defineItem(LINEN_CLOTH, { name = "Linen Cloth", stackCount = 20 })
+    mock.defineItem(RECEIPT, { name = "Forged Delivery Receipt" })
+    for bag = 0, 4 do
+        mock.setBag(bag, { slots = 16, items = {} })
+    end
+end
+
+@test("covers the first bundle the bags can fill, in game order")
+local function picksTin()
+    mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_ORE, [2] = { id = TIN_ORE, count = 25 } } })
+    local model = scan()
+    expect(#model.crates).toBe(1)
+    local row = model.crates[1]
+    expect(row.id).toBe(APPRENTICE_ORE)
+    expect(row.bundle?.item).toBe(TIN_ORE)
+    expect(row.bundle?.count).toBe(20)
+end
+
+@test("with no bundle covered, names the closest one and what is missing")
+local function closest()
+    mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_ORE, [2] = { id = TIN_ORE, count = 14 } } })
+    local row = scan().crates[1]
+    expect(row.bundle).toBeNil()
+    expect(row.closest?.item).toBe(TIN_ORE)
+    expect(row.closest?.missing).toBe(6)
+end
+
+@test("when both bundles are covered, the first in game order wins")
+local function gameOrder()
+    mock.setBag(0, { slots = 16, items = {
+        [1] = APPRENTICE_ORE,
+        [2] = { id = COPPER_ORE, count = 20 },
+        [3] = { id = TIN_ORE, count = 20 },
+    } })
+    expect(scan().crates[1].bundle?.item).toBe(COPPER_ORE)
+end
+
+@test("counts a material across bags")
+local function acrossBags()
+    mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_TEXTILES, [2] = { id = LINEN_CLOTH, count = 20 } } })
+    mock.setBag(1, { slots = 16, items = { [5] = { id = LINEN_CLOTH, count = 20 } } })
+    expect(scan().crates[1].bundle?.item).toBe(LINEN_CLOTH)
+end
+
+@test("three crates of one kind make one row with every slot")
+local function oneRowPerKind()
+    mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_ORE, [4] = APPRENTICE_ORE } })
+    mock.setBag(2, { slots = 16, items = { [7] = APPRENTICE_ORE } })
+    local model = scan()
+    expect(#model.crates).toBe(1)
+    expect(model.crates[1].count).toBe(3)
+    expect(#model.crates[1].slots).toBe(3)
+end
+
+@test("rows follow the crate table's order")
+local function rowOrder()
+    mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_TEXTILES, [2] = APPRENTICE_ORE } })
+    local model = scan()
+    expect(model.crates[1].id).toBe(APPRENTICE_ORE)
+    expect(model.crates[2].id).toBe(APPRENTICE_TEXTILES)
+end
+
+@test("counts receipts")
+local function receipts()
+    mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_ORE, [2] = RECEIPT, [3] = RECEIPT } })
+    expect(scan().receipts).toBe(2)
+end
+
+@test("an unknown Waylaid item is listed to fill by hand")
+local function manual()
+    mock.defineItem(999001, { name = "Waylaid Crate" })
+    mock.setBag(0, { slots = 16, items = { [1] = 999001 } })
+    local model = scan()
+    expect(#model.crates).toBe(0)
+    expect(#model.manual).toBe(1)
+    expect(model.manual[1].name).toBe("Waylaid Crate")
+end
+
+@test("empty bags give an empty model")
+local function empty()
+    local model = scan()
+    expect(#model.crates).toBe(0)
+    expect(#model.manual).toBe(0)
+    expect(model.receipts).toBe(0)
+end
+
+@test("the crate table has all thirty crates")
+local function thirty()
+    local n = 0
+    for _ in pairs(CRATES) do
+        n += 1
+    end
+    expect(n).toBe(30)
+end

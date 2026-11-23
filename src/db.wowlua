@@ -1,0 +1,10 @@
+import * as saved from "wowlua:saved"
+
+export interface Settings
+    position?: { point: string, x: number, y: number }
+end
+
+export local db = saved.bind("QuickCrateDB", {
+    version = 1,
+    defaults = {} :: Settings,
+})

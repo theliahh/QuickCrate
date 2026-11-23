@@ -1,0 +1,71 @@
+-- /qc debug: what QuickCrate sees in the bags, and (with "log") what the game
+-- does when a crate or receipt is used. For checking the game's behavior.
+import print from "wowlua:log"
+import CRATES, RECEIPT_ID from "/data"
+import itemName from "/inventory"
+
+const LAST_BAG = NUM_BAG_SLOTS ?? 4
+
+local function interesting(id: number): boolean
+    return CRATES[id] ~= nil or id == RECEIPT_ID or itemName(id):sub(1, 7) == "Waylaid"
+end
+
+--- Prints each Waylaid item and receipt in the bags with its use spell and slot.
+export function dump()
+    local found = 0
+    for bag = 0, LAST_BAG do
+        for slot = 1, C_Container.GetContainerNumSlots(bag) do
+            local id = C_Container.GetContainerItemID(bag, slot)
+            if id ~= nil and interesting(id) then
+                found += 1
+                local spellName, spellID = C_Item.GetItemSpell(id)
+                print(`{id} {itemName(id)} bag {bag} slot {slot} spell {spellName ?? "-"} ({spellID ?? "-"})`)
+            end
+        end
+    end
+    if found == 0 then
+        print("debug: nothing to report.")
+    end
+end
+
+const LOGGED_EVENTS = {
+    "UNIT_SPELLCAST_SENT",
+    "UNIT_SPELLCAST_SUCCEEDED",
+    "UNIT_SPELLCAST_FAILED",
+    "CURRENT_SPELL_CAST_CHANGED",
+    "GOSSIP_SHOW",
+    "BAG_UPDATE_DELAYED",
+}
+
+local logger = CreateFrame("Frame")
+local logging = false
+local popupHooked = false
+
+logger:SetScript("OnEvent", function(_: Frame, name: string, ...: any)
+    local args: string[] = {}
+    for i = 1, select("#", ...) do
+        args[#args + 1] = tostring((select(i, ...)))
+    end
+    print(`event {name} {table.concat(args, " ")}`)
+end)
+
+--- Turns logging of spellcast, gossip and popup events on or off.
+export function toggleLog()
+    logging = not logging
+    for _, name in ipairs(LOGGED_EVENTS) do
+        if logging then
+            logger:RegisterEvent(name)
+        else
+            logger:UnregisterEvent(name)
+        end
+    end
+    if logging and not popupHooked and StaticPopup_Show ~= nil then
+        popupHooked = true
+        hooksecurefunc("StaticPopup_Show", function(which: string)
+            if logging then
+                print(`popup {which}`)
+            end
+        end)
+    end
+    print(logging and "debug log on." or "debug log off.")
+end
