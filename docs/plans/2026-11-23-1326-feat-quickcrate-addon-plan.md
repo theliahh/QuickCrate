@@ -96,7 +96,7 @@ Merchant's Favor and the Durotar Supply and Logistics / Azeroth Commerce Authori
 - KTD1. **wowlua project in `D:\Dev\QuickCrate`, installed by `wowlua dev`.** The source lives outside `AddOns`. wowlua generates the TOC from `wowlua.json`, runs tests in its emulated client, and copies the build into `AddOns/QuickCrate`. (session-settled: user-directed — chosen over plain Lua edited in place in `AddOns/QuickCrate`: emulated-client tests and a generated TOC need wowlua to own the install folder.)
 - KTD2. **Source in typed `.wowlua` modules, tests in `tests/*.test.wowlua`.** Tests import modules by path (`/inventory`), which keeps the bag-scan logic testable without the UI. The release build bundles everything into one Lua file, so the module split costs nothing in game.
 - KTD3. **QuickCrate carries its own crate table, keyed by item ID.** The table maps crate ID to its bundles in game order. Item names come from `C_Item` at runtime, with English fallbacks for uncached items. The table is checked against both existing generated tables at authoring time. It doesn't depend on NaowhForever being installed.
-- KTD4. **Fill is a `SecureActionButtonTemplate` button that uses the crate by item ID, not by bag/slot.** Unfilled crates with the same ID are interchangeable. A stale bag/slot can't make the button use a different item, which satisfies R10. If U1 shows that a filled or notarized crate keeps the unfilled crate's item ID, using by ID could pick a crate that's already done. In that case Fill targets a bag/slot instead, and `PreClick` re-checks that the slot still holds an unfilled crate of that ID, the same way KTD5 does. Pattern: `AddOns/NaowhForever_QoL/Loot/Fishing.lua` sets item attributes the same way.
+- KTD4. **Fill is a `SecureActionButtonTemplate` button that uses the crate by item ID, then targets the chosen bundle's material with `target-item`.** In game, using a crate only starts the fill: the game then waits for the player to pick the material, so one click must do both steps. Blizzard's secure button (`Blizzard_FrameXML/SecureTemplates.lua`, `OnActionButtonClick`) targets `target-item` in the same click whenever the used item is waiting for an item target. Using the crate by ID means a stale bag/slot can't make the button use a different item, which satisfies R10. If the crate only asks for its target after a cast, the click can't reach the material. In that case the button arms for a second click: while the game waits for an item target within 3 seconds of a Fill click, the button drops its crate and reads "Put in", so the next click targets the material alone. It returns to Fill when targeting ends. If filled or notarized crates turn out to keep the unfilled crate's item ID, Fill switches to a bag/slot target that `PreClick` re-checks, the same way KTD5 does.
 - KTD5. **Apply Receipt is a secure button that uses item 262902 with `target-bag`/`target-slot` set to an unfilled crate.** The insecure `PreClick` re-resolves the target to a current unfilled crate of that row's ID, out of combat only. If the target goes stale anyway, the worst case is that the game rejects the target. Patterns: `AddOns/NaowhForever_Professions/UI/Disenchant.lua` (macro plus target attributes) and `AddOns/EllesmereUIBags/EllesmereUIBags_QuickActions.lua`.
 - KTD6. **The bundle named in the "Fills with" line is the one the game will consume.** U1 finds out how the game picks a bundle. Until then the working rule is "the first bundle, in the table's game order, that the bags fully cover". If U1 shows the player picks the bundle in a game dialog, the line names the first coverable bundle and the dialog does the rest.
 - KTD7. **Auto-open hooks `C_Container.UseContainerItem` with `hooksecurefunc`, filtered to crate and receipt IDs.** Every bag addon, Blizzard's and EllesmereUI Bags included, ends up in that function. The same hook is used by `AddOns/NaowhForever_Market/Ledger.lua`, `AddOns/Spoken_Readables/Opener.lua` and `AddOns/RXPGuides/HSBatching.lua`. QuickCrate's own secure buttons may or may not pass through the hook, depending on how the secure template uses the item. Either way it's harmless, because opening is idempotent (R8).
@@ -260,11 +260,17 @@ QuickCrate/
 
 ## Open Questions
 
-Deferred to implementation. U1's probe answers them, and the answers are recorded here before U2 and U4 finish:
+Deferred to implementation. U1's probe answers them. Answers from the first in-game test:
 
-- When the bags cover more than one bundle, does the game consume the first in game order, consume some other bundle, or ask the player to pick? (Affects KTD6 and R2's wording.)
+- Bags: the Forever client has a reagent bag (bag 5), and crates and materials can sit there. QuickCrate scans the backpack through `NUM_TOTAL_EQUIPPED_BAG_SLOTS`.
+- Fill flow: using a crate does not fill it on its own. The game then waits for the material to be picked (see KTD4).
+- Receipt: item 262902's use spell is "Forge Delivery Receipt" (1269600), which suggests it applies by targeting the crate, as KTD5 assumes. Not yet confirmed in game.
+
+Still open:
+
+- When the bags cover more than one bundle, does the game consume the bundle whose material is targeted, or decide some other way? (Affects KTD6 and R2's wording.)
 - Does a filled or notarized crate keep the unfilled crate's item ID? (Affects how U2 tells unfilled crates apart.)
-- Is a receipt applied by using the receipt and then targeting the crate, or by using the crate while holding a receipt? (Affects KTD5.)
+- Does targeting one stack work when a bundle's material is split across stacks?
 - What is the unlabelled Waylaid Crate's item ID, and does reading its label replace it with a labelled crate ID? (Affects R12.)
 
 ---

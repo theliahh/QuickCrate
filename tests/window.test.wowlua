@@ -49,6 +49,52 @@ local function fillByID()
     expect(rows[1].fill:GetAttribute("target-bag")).toBeNil()
 end
 
+@test("one Fill click uses the crate and targets the bundle's material")
+local function fillTargetsMaterial()
+    mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_ORE, [2] = { id = TIN_ORE, count = 20 } } })
+    mock.slash("/qc")
+    expect(rows[1].fill:GetAttribute("item")).toBe("item:248683")
+    expect(rows[1].fill:GetAttribute("target-item")).toBe("Tin Ore")
+end
+
+@test("when the crate asks for its target late, the second click puts the material in")
+local function secondClick()
+    local canTarget = false
+    mock.stub(_G, "SpellCanTargetItem", function(): boolean return canTarget end)
+    mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_ORE, [2] = { id = TIN_ORE, count = 20 } } })
+    mock.slash("/qc")
+    local fill = rows[1].fill
+    mock.click(fill)
+    mock.nextFrame()
+    expect(fill:GetText()).toBe("Fill")
+
+    canTarget = true                     -- the crate's cast ends and asks for an item
+    mock.nextFrame()
+    expect(fill:GetText()).toBe("Put in")
+    expect(fill:GetAttribute("item")).toBeNil()
+    expect(fill:GetAttribute("target-item")).toBe("Tin Ore")
+
+    canTarget = false                    -- the material went in, or the player cancelled
+    mock.nextFrame()
+    expect(fill:GetText()).toBe("Fill")
+    expect(fill:GetAttribute("item")).toBe("item:248683")
+end
+
+@test("an item-targeting spell long after a Fill click does not arm the button")
+local function staleClick()
+    local canTarget = false
+    mock.stub(_G, "SpellCanTargetItem", function(): boolean return canTarget end)
+    mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_ORE, [2] = { id = TIN_ORE, count = 20 } } })
+    mock.slash("/qc")
+    mock.click(rows[1].fill)
+    mock.nextFrame()
+    mock.waitSeconds(4)
+    canTarget = true
+    mock.nextFrame()
+    expect(rows[1].fill:GetText()).toBe("Fill")
+    expect(rows[1].fill:GetAttribute("item")).toBe("item:248683")
+end
+
 @test("two crate kinds make two rows, with a count when there are several")
 local function twoRows()
     mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_TEXTILES, [2] = APPRENTICE_ORE, [3] = APPRENTICE_ORE } })

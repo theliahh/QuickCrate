@@ -102,6 +102,57 @@ local function retargetReceipt(button: Button)
     end
 end
 
+-- Fill is one click when the crate asks for its target at once: the secure
+-- button uses the crate, then targets the bundle's material ("target-item").
+-- When the crate only asks after a cast, the button is armed for a second
+-- click that targets the material alone.
+local pendingFill: Button? = nil
+local pendingAt = 0
+local armedFill: Button? = nil
+
+const ARM_WINDOW = 3
+
+local function rememberFillClick(button: Button)
+    pendingFill = button
+    pendingAt = GetTime()
+end
+
+local function arm(button: Button)
+    armedFill = button
+    pendingFill = nil
+    button:SetAttribute("item", nil)
+    button:SetText("Put in")
+end
+
+local function disarm()
+    local button = armedFill
+    armedFill = nil
+    if button ~= nil then
+        button:SetAttribute("item", button:GetAttribute("quickcrate-item"))
+        button:SetText("Fill")
+    end
+end
+
+--- Watches for the crate's item target while a fill is in progress.
+local function watchFill()
+    if InCombatLockdown() then
+        return
+    end
+    if armedFill ~= nil then
+        if not SpellCanTargetItem() then
+            disarm()
+        end
+    elseif pendingFill ~= nil then
+        if SpellCanTargetItem() then
+            arm(pendingFill)
+        elseif GetTime() - pendingAt > ARM_WINDOW then
+            pendingFill = nil
+        end
+    end
+end
+
+frame:SetScript("OnUpdate", watchFill)
+
 local function secureButton(parent: Frame, label: string): Button
     local b = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate, UIPanelButtonTemplate")
     b:SetSize(BUTTON_WIDTH, 20)
@@ -133,6 +184,7 @@ local function getRow(i: number): Row
     line:SetWordWrap(false)
     local fill = secureButton(f, "Fill")
     fill:SetPoint("RIGHT", f, "RIGHT", 0, 0)
+    fill:SetScript("PostClick", rememberFillClick)
     local receipt = secureButton(f, "Receipt")
     receipt:SetPoint("RIGHT", fill, "LEFT", -4, 0)
     receipt:SetAttribute("item", `item:{RECEIPT_ID}`)
@@ -163,8 +215,17 @@ local function showCrate(row: Row, crate: CrateRow, receipts: number)
     row.icon:SetTexture(C_Item.GetItemIconByID(crate.id))
     row.name:SetText(nameWithCount(crate.name, crate.count))
     row.line:SetText(fillLine(crate))
-    row.fill:SetAttribute("item", `item:{crate.id}`)
-    row.fill:SetEnabled(crate.bundle ~= nil)
+    local crateItem = `item:{crate.id}`
+    local b = crate.bundle
+    row.fill:SetAttribute("quickcrate-item", crateItem)
+    row.fill:SetAttribute("target-item", b ~= nil and itemName(b.item) or nil)
+    if row.fill == armedFill then
+        row.fill:SetAttribute("item", nil)
+    else
+        row.fill:SetAttribute("item", crateItem)
+        row.fill:SetText("Fill")
+    end
+    row.fill:SetEnabled(b ~= nil)
     row.fill:Show()
     local s = crate.slots[1]
     row.receipt:SetAttribute("quickcrate-crate", crate.id)

@@ -7,6 +7,7 @@ A small WoW Forever addon that fills Waylaid Crates and applies Forged Delivery 
 - `/qc` or `/quickcrate` opens or closes the window.
 - The window also opens when you right-click a Waylaid Crate or a Forged Delivery Receipt in your bags.
 - Each crate row says what the next fill uses, for example "Fills with 20× Tin Ore". If your bags can't cover any bundle, it says what's missing and Fill is greyed out.
+- Fill uses the crate and puts that material in with one click. If the crate takes a moment before asking for the material, the button changes to "Put in": click it again to finish.
 - With receipts in your bags, each crate row gets a Receipt button that puts one receipt on that crate.
 - Unlabelled crates and other "Waylaid" items QuickCrate doesn't know are listed as "Fill by hand".
 - The window can't open or close during combat. `/qc` in combat opens it as soon as combat ends.
