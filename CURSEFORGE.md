@@ -27,10 +27,6 @@ QuickCrate opens a small window listing every Waylaid Crate in your bags. For ea
 
 Click the cogwheel next to the close button to open the settings, then pick a skin from the dropdown. The window changes straight away, and your choice is remembered for every character.
 
-## In combat
-
-The game doesn't let addons open or close windows like this one during combat. If you type /qc while fighting, the window opens as soon as combat ends, and Esc leaves it alone until then.
-
 ## Commands
 
 | Command | What it does |
