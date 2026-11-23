@@ -1,0 +1,275 @@
+-- The QuickCrate window: one row per kind of Waylaid Crate in the bags, each
+-- with a line saying what the next fill uses and secure Fill / Receipt buttons.
+import onLoad from "wowlua:lifecycle"
+import print from "wowlua:log"
+import RECEIPT_ID from "/data"
+import scan, itemName from "/inventory"
+import type CrateRow, ManualRow, Model from "/inventory"
+import db from "/db"
+
+const WIDTH = 340
+const ROW_HEIGHT = 40
+const PADDING = 10
+const HEADER_HEIGHT = 30
+const BUTTON_WIDTH = 64
+
+const GOOD = "|cff40ff40"
+const BAD = "|cffff5050"
+const DIM = "|cffa0a0a0"
+
+export const frame = CreateFrame("Frame", "QuickCrateFrame", UIParent)
+frame:SetSize(WIDTH, 120)
+frame:SetPoint("CENTER")
+frame:SetFrameStrata("DIALOG")
+frame:SetClampedToScreen(true)
+frame:SetMovable(true)
+frame:EnableMouse(true)
+frame:RegisterForDrag("LeftButton")
+frame:Hide()
+
+local border = frame:CreateTexture(nil, "BACKGROUND", nil, -1)
+border:SetAllPoints()
+border:SetColorTexture(0.35, 0.3, 0.2, 1)
+local background = frame:CreateTexture(nil, "BACKGROUND")
+background:SetPoint("TOPLEFT", 1, -1)
+background:SetPoint("BOTTOMRIGHT", -1, 1)
+background:SetColorTexture(0.05, 0.05, 0.08, 0.95)
+
+local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+title:SetPoint("TOPLEFT", PADDING, -PADDING)
+title:SetText("QuickCrate")
+
+local closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+closeButton:SetPoint("TOPRIGHT", 2, 2)
+
+--- The receipt count, or why no receipt can be applied.
+export const receiptHeader = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+receiptHeader:SetPoint("TOPLEFT", PADDING, -HEADER_HEIGHT)
+receiptHeader:SetJustifyH("LEFT")
+
+--- Shown when there is nothing to fill.
+export const emptyText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+emptyText:SetPoint("TOPLEFT", PADDING, -HEADER_HEIGHT)
+emptyText:SetText("No Waylaid Crates in your bags.")
+
+export type Row = {
+    frame: Frame,
+    icon: Texture,
+    name: FontString,
+    line: FontString,
+    fill: Button,
+    receipt: Button,
+}
+
+export const rows: Row[] = {}
+
+local function savePosition()
+    local point, _, _, x, y = frame:GetPoint(1)
+    if point ~= nil and not issecretvalue(x) and not issecretvalue(y) then
+        db.position = { point = point, x = x, y = y }
+    end
+end
+
+frame:SetScript("OnDragStart", function(self: Frame) self:StartMoving() end)
+frame:SetScript("OnDragStop", function(self: Frame)
+    self:StopMovingOrSizing()
+    savePosition()
+end)
+
+@onLoad
+local function restorePosition()
+    local p = db.position
+    if p ~= nil then
+        frame:ClearAllPoints()
+        local point: any = p.point
+        frame:SetPoint(point, UIParent, point, p.x, p.y)
+    end
+end
+
+--- Points a receipt button at a crate of its row's kind that is in the bags now.
+local function retargetReceipt(button: Button)
+    if InCombatLockdown() then
+        return
+    end
+    local crateID = button:GetAttribute("quickcrate-crate")
+    for _, row in ipairs(scan().crates) do
+        if row.id == crateID then
+            local s = row.slots[1]
+            button:SetAttribute("target-bag", s.bag)
+            button:SetAttribute("target-slot", s.slot)
+            return
+        end
+    end
+end
+
+local function secureButton(parent: Frame, label: string): Button
+    local b = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate, UIPanelButtonTemplate")
+    b:SetSize(BUTTON_WIDTH, 20)
+    b:SetText(label)
+    b:RegisterForClicks("LeftButtonUp", "LeftButtonDown")
+    b:SetAttribute("type", "item")
+    return b
+end
+
+local function getRow(i: number): Row
+    local row = rows[i]
+    if row ~= nil then
+        return row
+    end
+    local f = CreateFrame("Frame", nil, frame)
+    f:SetSize(WIDTH - 2 * PADDING, ROW_HEIGHT)
+    local icon = f:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(28, 28)
+    icon:SetPoint("LEFT", 0, 0)
+    local name = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    name:SetPoint("TOPLEFT", icon, "TOPRIGHT", 6, 0)
+    name:SetPoint("RIGHT", f, "RIGHT", -(2 * BUTTON_WIDTH + 8), 0)
+    name:SetJustifyH("LEFT")
+    name:SetWordWrap(false)
+    local line = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    line:SetPoint("BOTTOMLEFT", icon, "BOTTOMRIGHT", 6, 0)
+    line:SetPoint("RIGHT", f, "RIGHT", -(2 * BUTTON_WIDTH + 8), 0)
+    line:SetJustifyH("LEFT")
+    line:SetWordWrap(false)
+    local fill = secureButton(f, "Fill")
+    fill:SetPoint("RIGHT", f, "RIGHT", 0, 0)
+    local receipt = secureButton(f, "Receipt")
+    receipt:SetPoint("RIGHT", fill, "LEFT", -4, 0)
+    receipt:SetAttribute("item", `item:{RECEIPT_ID}`)
+    receipt:SetScript("PreClick", retargetReceipt)
+    row = { frame = f, icon = icon, name = name, line = line, fill = fill, receipt = receipt }
+    rows[i] = row
+    return row
+end
+
+--- The text under a crate's name: what the next fill uses, or what is missing.
+export function fillLine(crate: CrateRow): string
+    local b = crate.bundle
+    if b ~= nil then
+        return `{GOOD}Fills with {b.count}× {itemName(b.item)}|r`
+    end
+    local c = crate.closest
+    if c ~= nil then
+        return `{BAD}Need {c.missing} more {itemName(c.item)}|r`
+    end
+    return ""
+end
+
+local function nameWithCount(name: string, count: number): string
+    return count > 1 and `{name} ×{count}` or name
+end
+
+local function showCrate(row: Row, crate: CrateRow, receipts: number)
+    row.icon:SetTexture(C_Item.GetItemIconByID(crate.id))
+    row.name:SetText(nameWithCount(crate.name, crate.count))
+    row.line:SetText(fillLine(crate))
+    row.fill:SetAttribute("item", `item:{crate.id}`)
+    row.fill:SetEnabled(crate.bundle ~= nil)
+    row.fill:Show()
+    local s = crate.slots[1]
+    row.receipt:SetAttribute("quickcrate-crate", crate.id)
+    row.receipt:SetAttribute("target-bag", s.bag)
+    row.receipt:SetAttribute("target-slot", s.slot)
+    row.receipt:SetShown(receipts > 0)
+end
+
+local function showManual(row: Row, item: ManualRow)
+    row.icon:SetTexture(C_Item.GetItemIconByID(item.id))
+    row.name:SetText(nameWithCount(item.name, item.count))
+    row.line:SetText(`{DIM}Fill by hand|r`)
+    row.fill:Hide()
+    row.receipt:Hide()
+end
+
+local function receiptText(model: Model): string?
+    if model.receipts == 0 then
+        return nil
+    end
+    if #model.crates == 0 then
+        return "No unfilled crates"
+    end
+    return `Forged Delivery Receipts: {model.receipts}`
+end
+
+--- Rebuilds the rows from the bags. Changes secure buttons, so out of combat only.
+export function render()
+    if InCombatLockdown() then
+        return
+    end
+    local model = scan()
+    local top = HEADER_HEIGHT
+
+    local header = receiptText(model)
+    receiptHeader:SetShown(header ~= nil)
+    if header ~= nil then
+        receiptHeader:SetText(header)
+        top += 18
+    end
+
+    local used = 0
+    for _, crate in ipairs(model.crates) do
+        used += 1
+        local row = getRow(used)
+        showCrate(row, crate, model.receipts)
+        row.frame:SetPoint("TOPLEFT", PADDING, -(top + (used - 1) * ROW_HEIGHT))
+        row.frame:Show()
+    end
+    for _, item in ipairs(model.manual) do
+        used += 1
+        local row = getRow(used)
+        showManual(row, item)
+        row.frame:SetPoint("TOPLEFT", PADDING, -(top + (used - 1) * ROW_HEIGHT))
+        row.frame:Show()
+    end
+    for i = used + 1, #rows do
+        rows[i].frame:Hide()
+    end
+
+    emptyText:SetShown(used == 0)
+    if used == 0 then
+        emptyText:SetPoint("TOPLEFT", PADDING, -top)
+        used = 1
+    end
+    frame:SetHeight(top + used * ROW_HEIGHT + PADDING)
+end
+
+local pendingOpen = false
+
+--- Opens the window, or after combat when the player is in combat.
+export function open()
+    if InCombatLockdown() then
+        if not pendingOpen then
+            print("QuickCrate will open after combat.")
+        end
+        pendingOpen = true
+        return
+    end
+    pendingOpen = false
+    render()
+    frame:Show()
+end
+
+export function close()
+    if InCombatLockdown() then
+        print("QuickCrate can't close during combat.")
+        return
+    end
+    frame:Hide()
+end
+
+export function toggle()
+    if frame:IsShown() then
+        close()
+    else
+        open()
+    end
+end
+
+--- Runs the open that combat held back.
+export function afterCombat()
+    if pendingOpen then
+        open()
+    end
+end
+
+closeButton:SetScript("OnClick", close)

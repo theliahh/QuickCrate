@@ -1,0 +1,51 @@
+-- What opens and refreshes the window: the slash commands, using a crate or
+-- receipt from any bag addon, bag changes, and the end of combat.
+import slash from "wowlua:slash"
+import event from "wowlua:events"
+import hook from "wowlua:hooks"
+import isTracked from "/inventory"
+import frame, toggle, open, render, afterCombat from "/window"
+import dump, toggleLog from "/debug"
+
+@slash("/qc", "/quickcrate")
+local function command(msg: string)
+    local word = strtrim(msg):lower()
+    if word == "debug" then
+        dump()
+    elseif word == "debug log" then
+        toggleLog()
+    else
+        toggle()
+    end
+end
+
+-- Every bag addon ends up here when the player right-clicks an item.
+@hook(C_Container, "UseContainerItem")
+local function afterUse(bag: number, slot: number)
+    if isTracked(C_Container.GetContainerItemID(bag, slot)) and not frame:IsShown() then
+        open()
+    end
+end
+
+@event("BAG_UPDATE_DELAYED")
+local function onBagsChanged()
+    if frame:IsShown() then
+        render()
+    end
+end
+
+-- Item names arrive after the first scan on a fresh login.
+@event("GET_ITEM_INFO_RECEIVED")
+local function onItemInfo()
+    if frame:IsShown() then
+        render()
+    end
+end
+
+@event("PLAYER_REGEN_ENABLED")
+local function onCombatEnd()
+    afterCombat()
+    if frame:IsShown() then
+        render()
+    end
+end

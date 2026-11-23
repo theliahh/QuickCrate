@@ -1,0 +1,119 @@
+import test, beforeEach, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+import frame, rows, receiptHeader, emptyText from "/window"
+import db from "/db"
+
+const APPRENTICE_ORE = 248683
+const APPRENTICE_TEXTILES = 248684
+const TIN_ORE = 2771
+const RECEIPT = 262902
+
+@beforeEach
+local function setup()
+    mock.defineItem(APPRENTICE_ORE, { name = "Waylaid Crate: Apprentice Ore" })
+    mock.defineItem(APPRENTICE_TEXTILES, { name = "Waylaid Crate: Apprentice Textiles" })
+    mock.defineItem(TIN_ORE, { name = "Tin Ore", stackCount = 20 })
+    mock.defineItem(RECEIPT, { name = "Forged Delivery Receipt" })
+    for bag = 0, 4 do
+        mock.setBag(bag, { slots = 16, items = {} })
+    end
+    if frame:IsShown() then
+        mock.slash("/qc")
+    end
+end
+
+@test("a crate the bags can fill says what it fills with")
+local function fillsWith()
+    mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_ORE, [2] = { id = TIN_ORE, count = 25 } } })
+    mock.slash("/qc")
+    expect(frame).toBeShown()
+    expect(rows[1].name).toHaveText("Waylaid Crate: Apprentice Ore")
+    expect(rows[1].line).toHaveText("|cff40ff40Fills with 20× Tin Ore|r")
+    expect(rows[1].fill:IsEnabled()).toBe(true)
+end
+
+@test("a crate short of materials says what is missing and cannot fill")
+local function needMore()
+    mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_ORE, [2] = { id = TIN_ORE, count = 14 } } })
+    mock.slash("/qc")
+    expect(rows[1].line).toHaveText("|cffff5050Need 6 more Tin Ore|r")
+    expect(rows[1].fill:IsEnabled()).toBe(false)
+end
+
+@test("Fill uses the crate by item ID, never a bag slot")
+local function fillByID()
+    mock.setBag(1, { slots = 16, items = { [4] = APPRENTICE_ORE } })
+    mock.slash("/qc")
+    expect(rows[1].fill:GetAttribute("type")).toBe("item")
+    expect(rows[1].fill:GetAttribute("item")).toBe("item:248683")
+    expect(rows[1].fill:GetAttribute("target-bag")).toBeNil()
+end
+
+@test("two crate kinds make two rows, with a count when there are several")
+local function twoRows()
+    mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_TEXTILES, [2] = APPRENTICE_ORE, [3] = APPRENTICE_ORE } })
+    mock.slash("/qc")
+    expect(rows[1].name).toHaveText("Waylaid Crate: Apprentice Ore ×2")
+    expect(rows[2].name).toHaveText("Waylaid Crate: Apprentice Textiles")
+    expect(rows[2].frame).toBeShown()
+end
+
+@test("receipts: the header counts them and each crate targets its slot")
+local function receipts()
+    mock.setBag(0, { slots = 16, items = { [1] = RECEIPT, [2] = RECEIPT } })
+    mock.setBag(1, { slots = 16, items = { [4] = APPRENTICE_ORE } })
+    mock.slash("/qc")
+    expect(receiptHeader).toHaveText("Forged Delivery Receipts: 2")
+    local receipt = rows[1].receipt
+    expect(receipt).toBeShown()
+    expect(receipt:GetAttribute("item")).toBe("item:262902")
+    expect(receipt:GetAttribute("target-bag")).toBe(1)
+    expect(receipt:GetAttribute("target-slot")).toBe(4)
+end
+
+@test("a receipt click retargets a crate that moved since the window drew")
+local function retarget()
+    mock.setBag(0, { slots = 16, items = { [1] = RECEIPT } })
+    mock.setBag(1, { slots = 16, items = { [4] = APPRENTICE_ORE } })
+    mock.slash("/qc")
+    -- move the crate without letting the window redraw
+    frame:Hide()
+    mock.setBag(1, { slots = 16, items = {} })
+    mock.setBag(2, { slots = 16, items = { [1] = APPRENTICE_ORE } })
+    frame:Show()
+    mock.click(rows[1].receipt)
+    expect(rows[1].receipt:GetAttribute("target-bag")).toBe(2)
+    expect(rows[1].receipt:GetAttribute("target-slot")).toBe(1)
+end
+
+@test("a receipt with no crate to put it on says so")
+local function noCrates()
+    mock.setBag(0, { slots = 16, items = { [1] = RECEIPT } })
+    mock.slash("/qc")
+    expect(receiptHeader).toHaveText("No unfilled crates")
+    expect(emptyText).toBeShown()
+end
+
+@test("without receipts the receipt header and buttons are hidden")
+local function noReceipts()
+    mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_ORE } })
+    mock.slash("/qc")
+    expect(receiptHeader).never.toBeShown()
+    expect(rows[1].receipt).never.toBeShown()
+end
+
+@test("an unknown Waylaid item is shown to fill by hand, without buttons")
+local function manual()
+    mock.defineItem(999001, { name = "Waylaid Crate" })
+    mock.setBag(0, { slots = 16, items = { [1] = 999001 } })
+    mock.slash("/qc")
+    expect(rows[1].line).toHaveText("|cffa0a0a0Fill by hand|r")
+    expect(rows[1].fill).never.toBeShown()
+end
+
+@test("dragging the window remembers where it was left")
+local function remembers()
+    mock.slash("/qc")
+    mock.drag(frame, 100, 50)
+    expect(db.position).never.toBeNil()
+end

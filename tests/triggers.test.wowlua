@@ -1,0 +1,101 @@
+import test, beforeEach, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+import frame, rows from "/window"
+
+const APPRENTICE_ORE = 248683
+const RECEIPT = 262902
+const HEARTHSTONE = 6948
+
+--- Right-clicks a slot in Blizzard's bag frame, as the player would.
+local function useFromBag(bag: number, slot: number)
+    OpenAllBags()
+    for i = 1, 13 do
+        local container: any = _G[`ContainerFrame{i}`]
+        if container ~= nil and container:IsShown() and container.EnumerateValidItems ~= nil then
+            for _, button in container:EnumerateValidItems() do
+                if button:GetBagID() == bag and button:GetID() == slot then
+                    mock.click(button, "RightButton")
+                    return
+                end
+            end
+        end
+    end
+    error(`no bag button for {bag} {slot}`)
+end
+
+local function joined(): string
+    return table.concat(mock.printed(), "\n")
+end
+
+@beforeEach
+local function setup()
+    mock.defineItem(APPRENTICE_ORE, { name = "Waylaid Crate: Apprentice Ore" })
+    mock.defineItem(RECEIPT, { name = "Forged Delivery Receipt" })
+    mock.defineItem(HEARTHSTONE, { name = "Hearthstone" })
+    mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_ORE, [2] = RECEIPT, [3] = HEARTHSTONE } })
+    if frame:IsShown() then
+        mock.slash("/qc")
+    end
+end
+
+@test("/qc and /quickcrate toggle the window")
+local function toggles()
+    mock.slash("/qc")
+    expect(frame).toBeShown()
+    mock.slash("/qc")
+    expect(frame).never.toBeShown()
+    mock.slash("/quickcrate")
+    expect(frame).toBeShown()
+end
+
+@test("using a receipt from the bags opens the window")
+local function receiptOpens()
+    useFromBag(0, 2)
+    expect(frame).toBeShown()
+end
+
+@test("using a crate while the window is open leaves it open")
+local function staysOpen()
+    mock.slash("/qc")
+    useFromBag(0, 1)
+    expect(frame).toBeShown()
+end
+
+@test("using anything else does not open the window")
+local function otherItem()
+    useFromBag(0, 3)
+    expect(frame).never.toBeShown()
+end
+
+@test("in combat the window waits, and opens when combat ends")
+local function combat()
+    mock.player:enterCombat()
+    mock.slash("/qc")
+    expect(frame).never.toBeShown()
+    expect(joined()).toContain("QuickCrate will open after combat.")
+    mock.player:leaveCombat()
+    expect(frame).toBeShown()
+end
+
+@test("a bag change that removes the last crate removes its row")
+local function bagChange()
+    mock.slash("/qc")
+    expect(rows[1].frame).toBeShown()
+    mock.setBag(0, { slots = 16, items = { [2] = RECEIPT } })
+    expect(rows[1].frame).never.toBeShown()
+end
+
+@test("/qc debug lists the crate and the receipt")
+local function debugDump()
+    mock.slash("/qc debug")
+    local out = joined()
+    expect(out).toContain("248683 Waylaid Crate: Apprentice Ore bag 0 slot 1")
+    expect(out).toContain("262902 Forged Delivery Receipt bag 0 slot 2")
+end
+
+@test("/qc debug with no Waylaid items says there is nothing to report")
+local function debugEmpty()
+    mock.setBag(0, { slots = 16, items = { [3] = HEARTHSTONE } })
+    mock.slash("/qc debug")
+    expect(joined()).toContain("debug: nothing to report.")
+end
