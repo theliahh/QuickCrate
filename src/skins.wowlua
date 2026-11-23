@@ -1,0 +1,159 @@
+-- The looks QuickCrate's windows can take. A skin is data: the art it adds to a
+-- window, how its text is styled and how much room its frame needs. Only
+-- atlas art and plain colours are used; classic file-path textures don't
+-- resolve in every client.
+import db from "/db"
+
+export type Color = { r: number, g: number, b: number, a: number }
+
+export type Skin = {
+    id: string,
+    name: string,
+    -- window width and where the content sits inside the frame
+    width: number,
+    top: number,
+    side: number,
+    bottom: number,
+    -- extra left offset of the receipt line (room for a portrait)
+    headerX: number,
+    titleFont: string,
+    titleCentered: boolean,
+    titleY: number,
+    titleColor: Color?,
+    -- names and lines: nil keeps the font's own colour and shadow
+    ink: Color?,
+    good: string,
+    bad: string,
+    rowStripe: Color?,
+    rowDivider: Color?,
+    -- adds the skin's art to a window; returns everything it created
+    build: (host: Frame, overlay: Frame) -> any[],
+}
+
+const DEFAULT_ID = "metal"
+
+local function color(r: number, g: number, b: number, a: number): Color
+    return { r = r, g = g, b = b, a = a }
+end
+
+local function atlasBackground(host: Frame, atlas: string, inset: number, shade: number): any
+    local t: any = host:CreateTexture(nil, "BACKGROUND", nil, -7)
+    t:SetPoint("TOPLEFT", inset, -inset)
+    t:SetPoint("BOTTOMRIGHT", -inset, inset)
+    t:SetAtlas(atlas)
+    t:SetVertexColor(shade, shade, shade, 1)
+    return t
+end
+
+local function nineSlice(host: Frame, layout: string): any
+    local b: any = CreateFrame("Frame", nil, host, "NineSlicePanelTemplate")
+    b:SetAllPoints()
+    NineSliceUtil.ApplyLayoutByName(b, layout)
+    return b
+end
+
+local function solid(host: Frame, layer: "BACKGROUND" | "BORDER", sub: number, c: Color): any
+    local t: any = host:CreateTexture(nil, layer, nil, sub)
+    t:SetColorTexture(c.r, c.g, c.b, c.a)
+    return t
+end
+
+local function buildPlain(host: Frame, _: Frame): any[]
+    local border = solid(host, "BACKGROUND", -8, color(0.35, 0.3, 0.2, 1))
+    border:SetAllPoints()
+    local fill = solid(host, "BACKGROUND", -7, color(0.05, 0.05, 0.08, 0.95))
+    fill:SetPoint("TOPLEFT", 1, -1)
+    fill:SetPoint("BOTTOMRIGHT", -1, 1)
+    return { border, fill }
+end
+
+local function buildMetal(host: Frame, _: Frame): any[]
+    return { atlasBackground(host, "heavybronze-frame-background", 4, 0.8), nineSlice(host, "Dialog") }
+end
+
+local function buildPortrait(host: Frame, overlay: Frame): any[]
+    local border = nineSlice(host, "PortraitFrameTemplate")
+    local portrait: any = overlay:CreateTexture(nil, "ARTWORK")
+    portrait:SetSize(58, 58)
+    portrait:SetPoint("TOPLEFT", host, "TOPLEFT", -5, 7)
+    portrait:SetTexture(C_Item.GetItemIconByID(248683))
+    portrait:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    local mask: any = overlay:CreateMaskTexture()
+    mask:SetAllPoints(portrait)
+    mask:SetAtlas("CircleMaskScalable")
+    portrait:AddMaskTexture(mask)
+    return { atlasBackground(host, "heavybronze-frame-background", 2, 0.9), border, portrait }
+end
+
+local function buildParchment(host: Frame, _: Frame): any[]
+    return { atlasBackground(host, "QuestBG-Parchment", 4, 1), nineSlice(host, "WoodenNeutralFrameTemplate") }
+end
+
+local function buildSlate(host: Frame, _: Frame): any[]
+    local edge = solid(host, "BACKGROUND", -8, color(0x37 / 255, 0x3b / 255, 0x40 / 255, 1))
+    edge:SetPoint("TOPLEFT", -1, 1)
+    edge:SetPoint("BOTTOMRIGHT", 1, -1)
+    local fill = solid(host, "BACKGROUND", -7, color(0x19 / 255, 0x1b / 255, 0x1d / 255, 0.97))
+    fill:SetAllPoints()
+    local accent = solid(host, "BORDER", 0, color(1, 0xd1 / 255, 0, 1))
+    accent:SetHeight(2)
+    accent:SetPoint("TOPLEFT")
+    accent:SetPoint("TOPRIGHT")
+    return { edge, fill, accent }
+end
+
+const BRIGHT_GOOD = "|cff40ff40"
+const BRIGHT_BAD = "|cffff5050"
+const WIDE = 380
+
+--- Every skin, in the order the settings dropdown lists them.
+export const SKINS: Skin[] = {
+    {
+        id = "metal", name = "Metal", width = WIDE, top = 38, side = 10, bottom = 10, headerX = 0,
+        titleFont = "GameFontNormalLarge", titleCentered = true, titleY = -12,
+        good = BRIGHT_GOOD, bad = BRIGHT_BAD, rowStripe = color(0, 0, 0, 0.3), build = buildMetal,
+    },
+    {
+        id = "portrait", name = "Portrait", width = WIDE + 12, top = 64, side = 16, bottom = 12, headerX = 52,
+        titleFont = "GameFontNormal", titleCentered = true, titleY = -5,
+        good = BRIGHT_GOOD, bad = BRIGHT_BAD, rowStripe = color(0, 0, 0, 0.3), build = buildPortrait,
+    },
+    {
+        id = "parchment", name = "Parchment", width = WIDE + 44, top = 52, side = 32, bottom = 28, headerX = 0,
+        titleFont = "QuestTitleFont", titleCentered = true, titleY = -24, titleColor = color(0.25, 0.12, 0.02, 1),
+        ink = color(0.18, 0.1, 0.02, 1), good = "|cff1a5c00", bad = "|cff8a0000",
+        rowDivider = color(0.35, 0.2, 0.05, 0.35), build = buildParchment,
+    },
+    {
+        id = "slate", name = "Slate", width = WIDE, top = 30, side = 10, bottom = 10, headerX = 0,
+        titleFont = "GameFontNormal", titleCentered = false, titleY = -10,
+        good = BRIGHT_GOOD, bad = BRIGHT_BAD, rowStripe = color(1, 1, 1, 0.03), build = buildSlate,
+    },
+    {
+        id = "plain", name = "Plain", width = WIDE, top = 30, side = 10, bottom = 10, headerX = 0,
+        titleFont = "GameFontNormal", titleCentered = false, titleY = -10,
+        good = BRIGHT_GOOD, bad = BRIGHT_BAD, build = buildPlain,
+    },
+}
+
+--- The skin with this id, or nil.
+export function skinById(id: string?): Skin?
+    for _, s in ipairs(SKINS) do
+        if s.id == id then
+            return s
+        end
+    end
+    return nil
+end
+
+--- The player's skin; Metal when none is stored or the stored one is unknown.
+export function activeSkin(): Skin
+    return skinById(db.skin) ?? skinById(DEFAULT_ID) :: Skin
+end
+
+--- Saves the player's skin choice. Ignores ids that aren't skins.
+export function saveSkin(id: string)
+    if skinById(id) ~= nil then
+        db.skin = id
+    end
+end
