@@ -265,11 +265,11 @@ Deferred to implementation. U1's probe answers them. Answers from the first in-g
 - Bags: the Forever client has a reagent bag (bag 5), and crates and materials can sit there. QuickCrate scans the backpack through `NUM_TOTAL_EQUIPPED_BAG_SLOTS`.
 - Fill flow: using a crate does not fill it on its own. The game then waits for the material to be picked. The one-click Fill (crate plus `target-item`) fills the crate in game, so the "Put in" second click is only a fallback (see KTD4).
 - Receipt: confirmed in game. One Receipt click casts "Forge Delivery Receipt" (1269600) on the targeted crate and gives a new item, Notarized Shipping Container, with no targeting cursor (KTD5 holds). The notarized container is a different item, so it never counts as an unfilled crate.
+- Filled crate: a filled Apprentice Ore crate in the bags did not show in `/qc debug`, so filling turns it into a different item, neither ID 248683 nor named "Waylaid". Fill and Receipt by crate ID can't pick a crate that's already done.
 
 Still open:
 
 - When the bags cover more than one bundle, does the game consume the bundle whose material is targeted, or decide some other way? (Affects KTD6 and R2's wording.)
-- Does a filled or notarized crate keep the unfilled crate's item ID? (Affects how U2 tells unfilled crates apart.)
 - Does targeting one stack work when a bundle's material is split across stacks?
 - What is the unlabelled Waylaid Crate's item ID, and does reading its label replace it with a labelled crate ID? (Affects R12.)
 
