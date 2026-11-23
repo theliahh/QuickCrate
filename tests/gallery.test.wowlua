@@ -1,0 +1,30 @@
+-- Skin gallery: draws the window in every skin and saves a screenshot of each,
+-- to look at. Run with real game art: wowlua test gallery --game-data
+-- Images land in dist/screenshots/gallery.test.wowlua/.
+import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+import frame, appliedSkin from "/window"
+import cog, pickSkin from "/settings"
+import SKINS from "/skins"
+
+@test("every skin")
+local function everySkin()
+    for bag = 0, 5 do
+        mock.setBag(bag, { slots = 16, items = {} })
+    end
+    mock.setBag(0, { slots = 16, items = {
+        [1] = 248683, [2] = { id = 2770, count = 20 },           -- Apprentice Ore, Copper Ore
+        [3] = 248684, [4] = 248684, [5] = { id = 2589, count = 40 }, -- Apprentice Textiles x2, Linen
+        [6] = 248686, [7] = { id = 3820, count = 4 },            -- Journeyman Herbs, short
+        [8] = { id = 262902, count = 2 },                        -- receipts
+    } })
+    mock.slash("/qc")
+    mock.click(cog)
+    for _, skin in ipairs(SKINS) do
+        pickSkin(skin.id)
+        mock.nextFrame()
+        expect(appliedSkin()).toBe(skin.id)
+        mock.screenshot(skin.name)
+    end
+    expect(frame).toBeShown()
+end

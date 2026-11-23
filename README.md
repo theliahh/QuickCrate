@@ -12,6 +12,12 @@ A small WoW Forever addon that fills Waylaid Crates and applies Forged Delivery 
 - Unlabelled crates and other "Waylaid" items QuickCrate doesn't know are listed as "Fill by hand".
 - The window can't open or close during combat. `/qc` in combat opens it as soon as combat ends.
 
+## Skins
+
+Click the cogwheel next to the close button to open the settings window, then pick a skin from the dropdown: **Metal** (the default), **Portrait**, **Parchment**, **Slate** or **Plain**. The window changes straight away, and the choice is remembered for every character. A skin picked during combat takes effect when combat ends.
+
+To see every skin without starting the game, run `wowlua test gallery --game-data`. It saves a screenshot per skin to `dist/screenshots/gallery.test.wowlua/`.
+
 ## Checking the game's behavior
 
 `/qc debug` lists every Waylaid item and receipt in your bags with its item ID, slot and use spell.

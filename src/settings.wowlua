@@ -4,12 +4,13 @@ import onLoad from "wowlua:lifecycle"
 import SKINS, activeSkin from "/skins"
 import frame, overlay, closeButton, setSkin, showChrome, styleTitle, ink from "/window"
 
-const WIDTH = 210
-const HEIGHT = 96
+-- room for the label and dropdown, inside each skin's own padding
+const CONTENT_WIDTH = 180
+const CONTENT_HEIGHT = 40
 
 --- The settings window, beside the main window.
 export const settings = CreateFrame("Frame", "QuickCrateSettings", frame)
-settings:SetSize(WIDTH, HEIGHT)
+settings:SetSize(CONTENT_WIDTH, CONTENT_HEIGHT)
 settings:SetPoint("TOPLEFT", frame, "TOPRIGHT", 4, 0)
 settings:SetFrameStrata("DIALOG")
 settings:EnableMouse(true)
@@ -34,11 +35,12 @@ local chromes: { [string]: any[] } = {}
 --- Gives the settings window the player's skin.
 local function dress()
     local skin = activeSkin()
+    settings:SetSize(CONTENT_WIDTH + 2 * skin.side, math.max(skin.top + CONTENT_HEIGHT + skin.bottom, skin.minHeight))
     showChrome(settings, settingsOverlay, chromes, skin)
     styleTitle(title, skin)
     ink(label, skin)
     label:ClearAllPoints()
-    label:SetPoint("TOPLEFT", skin.side + skin.headerX, -(skin.top + 4))
+    label:SetPoint("TOPLEFT", skin.side, -(skin.top + 10))
     dropdown:ClearAllPoints()
     dropdown:SetPoint("LEFT", label, "RIGHT", 10, 0)
 end

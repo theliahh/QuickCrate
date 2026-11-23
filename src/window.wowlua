@@ -297,6 +297,12 @@ local function dressRow(row: Row, index: number, top: number, skin: Skin)
         row.divider:SetColorTexture(d.r, d.g, d.b, d.a)
     end
     ink(row.name, skin)
+    -- the line's colour comes from its text; ink skins only drop its shadow
+    if skin.ink ~= nil then
+        row.line:SetShadowOffset(0, 0)
+    else
+        row.line:SetShadowOffset(1, -1)
+    end
     row.frame:Show()
 end
 
@@ -382,7 +388,7 @@ export function render()
         emptyText:SetPoint("TOPLEFT", skin.side, -top)
         used = 1
     end
-    frame:SetHeight(top + used * ROW_HEIGHT + skin.bottom)
+    frame:SetHeight(math.max(top + used * ROW_HEIGHT + skin.bottom, skin.minHeight))
 end
 
 --- Draws the window in the player's skin. Resizing a window with secure

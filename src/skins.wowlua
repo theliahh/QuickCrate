@@ -16,6 +16,8 @@ export type Skin = {
     bottom: number,
     -- extra left offset of the receipt line (room for a portrait)
     headerX: number,
+    -- the shortest a window can be before the skin's border art breaks
+    minHeight: number,
     titleFont: string,
     titleCentered: boolean,
     titleY: number,
@@ -109,28 +111,28 @@ const WIDE = 380
 --- Every skin, in the order the settings dropdown lists them.
 export const SKINS: Skin[] = {
     {
-        id = "metal", name = "Metal", width = WIDE, top = 38, side = 10, bottom = 10, headerX = 0,
+        id = "metal", name = "Metal", width = WIDE, top = 38, side = 10, bottom = 10, headerX = 0, minHeight = 0,
         titleFont = "GameFontNormalLarge", titleCentered = true, titleY = -12,
         good = BRIGHT_GOOD, bad = BRIGHT_BAD, rowStripe = color(0, 0, 0, 0.3), build = buildMetal,
     },
     {
-        id = "portrait", name = "Portrait", width = WIDE + 12, top = 64, side = 16, bottom = 12, headerX = 52,
+        id = "portrait", name = "Portrait", width = WIDE + 12, top = 64, side = 16, bottom = 12, headerX = 52, minHeight = 0,
         titleFont = "GameFontNormal", titleCentered = true, titleY = -5,
         good = BRIGHT_GOOD, bad = BRIGHT_BAD, rowStripe = color(0, 0, 0, 0.3), build = buildPortrait,
     },
     {
-        id = "parchment", name = "Parchment", width = WIDE + 44, top = 52, side = 32, bottom = 28, headerX = 0,
+        id = "parchment", name = "Parchment", width = WIDE + 44, top = 52, side = 32, bottom = 28, headerX = 0, minHeight = 180,
         titleFont = "QuestTitleFont", titleCentered = true, titleY = -24, titleColor = color(0.25, 0.12, 0.02, 1),
         ink = color(0.18, 0.1, 0.02, 1), good = "|cff1a5c00", bad = "|cff8a0000",
         rowDivider = color(0.35, 0.2, 0.05, 0.35), build = buildParchment,
     },
     {
-        id = "slate", name = "Slate", width = WIDE, top = 30, side = 10, bottom = 10, headerX = 0,
+        id = "slate", name = "Slate", width = WIDE, top = 30, side = 10, bottom = 10, headerX = 0, minHeight = 0,
         titleFont = "GameFontNormal", titleCentered = false, titleY = -10,
         good = BRIGHT_GOOD, bad = BRIGHT_BAD, rowStripe = color(1, 1, 1, 0.03), build = buildSlate,
     },
     {
-        id = "plain", name = "Plain", width = WIDE, top = 30, side = 10, bottom = 10, headerX = 0,
+        id = "plain", name = "Plain", width = WIDE, top = 30, side = 10, bottom = 10, headerX = 0, minHeight = 0,
         titleFont = "GameFontNormal", titleCentered = false, titleY = -10,
         good = BRIGHT_GOOD, bad = BRIGHT_BAD, build = buildPlain,
     },
