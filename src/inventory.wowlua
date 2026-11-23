@@ -26,7 +26,8 @@ export type Model = {
     receiptSlots: Slot[],
 }
 
-const LAST_BAG = NUM_BAG_SLOTS ?? 4
+--- The last bag scanned: the backpack is 0, then the equipped bags.
+export const LAST_BAG = NUM_BAG_SLOTS ?? 4
 
 --- The item's name from the client, or the English fallback while it loads.
 export function itemName(id: number): string

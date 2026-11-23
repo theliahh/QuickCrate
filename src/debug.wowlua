@@ -1,13 +1,10 @@
 -- /qc debug: what QuickCrate sees in the bags, and (with "log") what the game
 -- does when a crate or receipt is used. For checking the game's behavior.
 import print from "wowlua:log"
-import CRATES, RECEIPT_ID from "/data"
-import itemName from "/inventory"
-
-const LAST_BAG = NUM_BAG_SLOTS ?? 4
+import itemName, isTracked, LAST_BAG from "/inventory"
 
 local function interesting(id: number): boolean
-    return CRATES[id] ~= nil or id == RECEIPT_ID or itemName(id):sub(1, 7) == "Waylaid"
+    return isTracked(id) or itemName(id):sub(1, 7) == "Waylaid"
 end
 
 --- Prints each Waylaid item and receipt in the bags with its use spell and slot.
