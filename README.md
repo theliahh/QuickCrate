@@ -10,7 +10,8 @@ A small WoW Forever addon that fills Waylaid Crates and applies Forged Delivery 
 - Fill uses the crate and puts that material in with one click. If the crate takes a moment before asking for the material, the button changes to "Put in": click it again to finish.
 - With receipts in your bags, each crate row gets a Receipt button that puts one receipt on that crate.
 - Unlabelled crates and other "Waylaid" items QuickCrate doesn't know are listed as "Fill by hand".
-- The window can't open or close during combat. `/qc` in combat opens it as soon as combat ends.
+- Esc closes the window (and the settings window with it), like Blizzard's own panels.
+- The window can't open or close during combat, so Esc leaves it alone while you're fighting. `/qc` in combat opens it as soon as combat ends.
 
 ## Skins
 
