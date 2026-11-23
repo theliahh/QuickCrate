@@ -18,7 +18,7 @@ local function emptyBags()
     mock.defineItem(TIN_ORE, { name = "Tin Ore", stackCount = 20 })
     mock.defineItem(LINEN_CLOTH, { name = "Linen Cloth", stackCount = 20 })
     mock.defineItem(RECEIPT, { name = "Forged Delivery Receipt" })
-    for bag = 0, 4 do
+    for bag = 0, 5 do
         mock.setBag(bag, { slots = 16, items = {} })
     end
 end
@@ -58,6 +58,15 @@ local function acrossBags()
     mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_TEXTILES, [2] = { id = LINEN_CLOTH, count = 20 } } })
     mock.setBag(1, { slots = 16, items = { [5] = { id = LINEN_CLOTH, count = 20 } } })
     expect(scan().crates[1].bundle?.item).toBe(LINEN_CLOTH)
+end
+
+@test("finds a crate and its materials in the reagent bag")
+local function reagentBag()
+    mock.setBag(5, { slots = 16, items = { [6] = APPRENTICE_ORE, [7] = { id = TIN_ORE, count = 20 } } })
+    local model = scan()
+    expect(#model.crates).toBe(1)
+    expect(model.crates[1].slots[1].bag).toBe(5)
+    expect(model.crates[1].bundle?.item).toBe(TIN_ORE)
 end
 
 @test("three crates of one kind make one row with every slot")

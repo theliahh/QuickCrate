@@ -14,7 +14,7 @@ local function setup()
     mock.defineItem(APPRENTICE_TEXTILES, { name = "Waylaid Crate: Apprentice Textiles" })
     mock.defineItem(TIN_ORE, { name = "Tin Ore", stackCount = 20 })
     mock.defineItem(RECEIPT, { name = "Forged Delivery Receipt" })
-    for bag = 0, 4 do
+    for bag = 0, 5 do
         mock.setBag(bag, { slots = 16, items = {} })
     end
     if frame:IsShown() then
