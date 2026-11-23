@@ -28,3 +28,20 @@ local function everySkin()
     end
     expect(frame).toBeShown()
 end
+
+@test("every skin, with only a receipt")
+local function receiptOnly()
+    for bag = 0, 5 do
+        mock.setBag(bag, { slots = 16, items = {} })
+    end
+    mock.setBag(0, { slots = 16, items = { [1] = { id = 262902, count = 1 } } })
+    if not frame:IsShown() then
+        mock.slash("/qc")
+    end
+    for _, skin in ipairs(SKINS) do
+        pickSkin(skin.id)
+        mock.nextFrame()
+        expect(appliedSkin()).toBe(skin.id)
+        mock.screenshot(`{skin.name} empty`)
+    end
+end

@@ -1,6 +1,7 @@
 import test, beforeEach, expect from "wowlua:test"
 import * as mock from "wowlua:mock"
-import frame, rows, setSkin, appliedSkin from "/window"
+import frame, rows, setSkin, appliedSkin, closeButton, receiptHeader, emptyText from "/window"
+import cog from "/settings"
 import SKINS, skinById from "/skins"
 import db from "/db"
 
@@ -66,6 +67,31 @@ local function combatPick()
     expect(appliedSkin()).toBe("metal")
     mock.player:leaveCombat()
     expect(appliedSkin()).toBe("parchment")
+end
+
+@test("in every skin the close button and cogwheel stay inside the window")
+local function buttonsInside()
+    for _, skin in ipairs(SKINS) do
+        setSkin(skin.id)
+        mock.nextFrame()
+        expect(closeButton:GetRight() <= frame:GetRight()).toBe(true)
+        expect(closeButton:GetTop() <= frame:GetTop()).toBe(true)
+        expect(cog:GetTop() <= frame:GetTop()).toBe(true)
+        expect(cog:GetLeft() >= frame:GetLeft()).toBe(true)
+    end
+end
+
+@test("in every skin the receipt line and the empty line start at the same place")
+local function linesAligned()
+    mock.defineItem(262902, { name = "Forged Delivery Receipt" })
+    mock.setBag(0, { slots = 16, items = { [1] = 262902 } })
+    for _, skin in ipairs(SKINS) do
+        setSkin(skin.id)
+        mock.nextFrame()
+        expect(receiptHeader).toBeShown()
+        expect(emptyText).toBeShown()
+        expect(receiptHeader:GetLeft()).toBe(emptyText:GetLeft())
+    end
 end
 
 @test("of two skins picked in one combat, the last one applies")

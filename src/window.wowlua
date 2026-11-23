@@ -38,7 +38,6 @@ local title = overlay:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 title:SetText("QuickCrate")
 
 export const closeButton = CreateFrame("Button", nil, overlay, "UIPanelCloseButton")
-closeButton:SetPoint("TOPRIGHT", 2, 2)
 
 --- The receipt count, or why no receipt can be applied.
 export const receiptHeader = overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -115,6 +114,8 @@ local function applyChrome(skin: Skin)
     applied = skin
     showChrome(frame, overlay, chromes, skin)
     frame:SetWidth(skin.width)
+    closeButton:ClearAllPoints()
+    closeButton:SetPoint("TOPRIGHT", skin.closeX, skin.closeY)
     styleTitle(title, skin)
     ink(receiptHeader, skin)
     ink(emptyText, skin)
@@ -361,7 +362,7 @@ export function render()
     if header ~= nil then
         receiptHeader:SetText(header)
         receiptHeader:ClearAllPoints()
-        receiptHeader:SetPoint("TOPLEFT", skin.side + skin.headerX, -top)
+        receiptHeader:SetPoint("TOPLEFT", skin.side, -top)
         top += HEADER_LINE
     end
 
