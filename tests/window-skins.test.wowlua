@@ -1,0 +1,78 @@
+import test, beforeEach, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+import frame, rows, setSkin, appliedSkin from "/window"
+import SKINS, skinById from "/skins"
+import db from "/db"
+
+const APPRENTICE_ORE = 248683
+const TIN_ORE = 2771
+
+@beforeEach
+local function setup()
+    mock.defineItem(APPRENTICE_ORE, { name = "Waylaid Crate: Apprentice Ore" })
+    mock.defineItem(TIN_ORE, { name = "Tin Ore", stackCount = 20 })
+    for bag = 0, 5 do
+        mock.setBag(bag, { slots = 16, items = {} })
+    end
+    mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_ORE, [2] = { id = TIN_ORE, count = 20 } } })
+    setSkin("metal")
+    if not frame:IsShown() then
+        mock.slash("/qc")
+    end
+end
+
+@test("a fresh install shows the window in Metal")
+local function freshMetal()
+    expect(db.skin).toBe("metal")
+    expect(appliedSkin()).toBe("metal")
+    expect(frame:GetWidth()).toBe(skinById("metal")?.width)
+end
+
+@test("every skin applies its own room and keeps the Fill button working")
+local function everySkin()
+    for _, skin in ipairs(SKINS) do
+        setSkin(skin.id)
+        expect(appliedSkin()).toBe(skin.id)
+        expect(frame:GetWidth()).toBe(skin.width)
+        local _, _, _, x = rows[1].frame:GetPoint(1)
+        expect(x).toBe(skin.side)
+        expect(rows[1].fill:GetAttribute("item")).toBe("item:248683")
+    end
+end
+
+@test("crate names are shown without the Waylaid Crate prefix")
+local function shortNames()
+    expect(rows[1].name).toHaveText("Apprentice Ore")
+end
+
+@test("an unknown Waylaid item keeps its full name")
+local function manualName()
+    mock.defineItem(999001, { name = "Waylaid Crate" })
+    mock.setBag(0, { slots = 16, items = { [1] = 999001 } })
+    expect(rows[1].name).toHaveText("Waylaid Crate")
+end
+
+@test("Parchment writes the fill line in dark ink")
+local function parchmentInk()
+    setSkin("parchment")
+    expect(rows[1].line).toHaveText("|cff1a5c00Fills with 20× Tin Ore|r")
+end
+
+@test("a skin picked in combat applies when combat ends")
+local function combatPick()
+    mock.player:enterCombat()
+    setSkin("parchment")
+    expect(db.skin).toBe("parchment")
+    expect(appliedSkin()).toBe("metal")
+    mock.player:leaveCombat()
+    expect(appliedSkin()).toBe("parchment")
+end
+
+@test("of two skins picked in one combat, the last one applies")
+local function twoPicks()
+    mock.player:enterCombat()
+    setSkin("slate")
+    setSkin("portrait")
+    mock.player:leaveCombat()
+    expect(appliedSkin()).toBe("portrait")
+end

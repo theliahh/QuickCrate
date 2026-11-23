@@ -27,7 +27,7 @@ local function fillsWith()
     mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_ORE, [2] = { id = TIN_ORE, count = 25 } } })
     mock.slash("/qc")
     expect(frame).toBeShown()
-    expect(rows[1].name).toHaveText("Waylaid Crate: Apprentice Ore")
+    expect(rows[1].name).toHaveText("Apprentice Ore")
     expect(rows[1].line).toHaveText("|cff40ff40Fills with 20× Tin Ore|r")
     expect(rows[1].fill:IsEnabled()).toBe(true)
 end
@@ -99,8 +99,8 @@ end
 local function twoRows()
     mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_TEXTILES, [2] = APPRENTICE_ORE, [3] = APPRENTICE_ORE } })
     mock.slash("/qc")
-    expect(rows[1].name).toHaveText("Waylaid Crate: Apprentice Ore ×2")
-    expect(rows[2].name).toHaveText("Waylaid Crate: Apprentice Textiles")
+    expect(rows[1].name).toHaveText("Apprentice Ore ×2")
+    expect(rows[2].name).toHaveText("Apprentice Textiles")
     expect(rows[2].frame).toBeShown()
 end
 
