@@ -1,0 +1,38 @@
+import test, expect from "wowlua:test"
+import SKINS, activeSkin, saveSkin from "/skins"
+import db from "/db"
+
+@test("with no stored skin, the active skin is Metal")
+local function defaultMetal()
+    expect(activeSkin().id).toBe("metal")
+end
+
+@test("a stored skin is the active skin")
+local function stored()
+    saveSkin("slate")
+    expect(activeSkin().id).toBe("slate")
+    expect(db.skin).toBe("slate")
+    saveSkin("metal")
+end
+
+@test("a stored value that isn't a skin falls back to Metal")
+local function unknown()
+    db.skin = "neon"
+    expect(activeSkin().id).toBe("metal")
+    db.skin = "metal"
+end
+
+@test("saving an unknown skin changes nothing")
+local function saveUnknown()
+    saveSkin("neon")
+    expect(db.skin).toBe("metal")
+end
+
+@test("the skins are Metal, Portrait, Parchment, Slate and Plain, in that order")
+local function order()
+    local names: string[] = {}
+    for _, s in ipairs(SKINS) do
+        names[#names + 1] = s.name
+    end
+    expect(names).toEqual({ "Metal", "Portrait", "Parchment", "Slate", "Plain" })
+end

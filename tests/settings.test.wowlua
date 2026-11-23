@@ -1,0 +1,65 @@
+import test, beforeEach, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+import frame, appliedSkin, setSkin from "/window"
+import settings, cog, pickSkin, skinOptions, dropdown from "/settings"
+import db from "/db"
+
+@beforeEach
+local function setup()
+    mock.defineItem(248683, { name = "Waylaid Crate: Apprentice Ore" })
+    mock.setBag(0, { slots = 16, items = { [1] = 248683 } })
+    setSkin("metal")
+    if not frame:IsShown() then
+        mock.slash("/qc")
+    end
+    if settings:IsShown() then
+        mock.click(cog)
+    end
+end
+
+@test("the cogwheel opens and closes the settings window")
+local function cogToggles()
+    mock.click(cog)
+    expect(settings).toBeShown()
+    mock.click(cog)
+    expect(settings).never.toBeShown()
+end
+
+@test("the dropdown offers the five skins, with Metal chosen on a fresh install")
+local function options()
+    expect(skinOptions()).toEqual({
+        { "Metal", "metal" }, { "Portrait", "portrait" }, { "Parchment", "parchment" },
+        { "Slate", "slate" }, { "Plain", "plain" },
+    })
+    mock.click(cog)
+    expect(dropdown:GetText()).toBe("Metal")
+end
+
+@test("picking Slate switches the window at once and remembers it")
+local function pickSlate()
+    mock.click(cog)
+    pickSkin("slate")
+    expect(appliedSkin()).toBe("slate")
+    expect(db.skin).toBe("slate")
+    expect(dropdown:GetText()).toBe("Slate")
+end
+
+@test("in combat the settings window still opens and takes a pick")
+local function inCombat()
+    mock.player:enterCombat()
+    mock.click(cog)
+    expect(settings).toBeShown()
+    pickSkin("parchment")
+    expect(db.skin).toBe("parchment")
+    expect(appliedSkin()).toBe("metal")
+    mock.player:leaveCombat()
+    expect(appliedSkin()).toBe("parchment")
+end
+
+@test("closing the main window also closes the settings window")
+local function closesWithMain()
+    mock.click(cog)
+    mock.slash("/qc")
+    expect(frame).never.toBeShown()
+    expect(settings).never.toBeVisible()
+end

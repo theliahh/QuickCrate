@@ -2,23 +2,25 @@
 -- with a line saying what the next fill uses and secure Fill / Receipt buttons.
 import onLoad from "wowlua:lifecycle"
 import print from "wowlua:log"
+import defer from "wowlua:combat"
 import RECEIPT_ID from "/data"
 import scan, itemName from "/inventory"
 import type CrateRow, ManualRow, Model from "/inventory"
+import SKINS, activeSkin, saveSkin from "/skins"
+import type Skin, Color from "/skins"
 import db from "/db"
 
-const WIDTH = 340
 const ROW_HEIGHT = 40
-const PADDING = 10
-const HEADER_HEIGHT = 30
+const HEADER_LINE = 18
 const BUTTON_WIDTH = 64
+-- above any skin's border art, so text and buttons are never covered
+const OVERLAY_LEVEL = 700
 
-const GOOD = "|cff40ff40"
-const BAD = "|cffff5050"
 const DIM = "|cffa0a0a0"
+const NAME_PREFIX = "^Waylaid Crate: "
 
 export const frame = CreateFrame("Frame", "QuickCrateFrame", UIParent)
-frame:SetSize(WIDTH, 120)
+frame:SetSize(380, 120)
 frame:SetPoint("CENTER")
 frame:SetFrameStrata("DIALOG")
 frame:SetClampedToScreen(true)
@@ -27,29 +29,22 @@ frame:EnableMouse(true)
 frame:RegisterForDrag("LeftButton")
 frame:Hide()
 
-local border = frame:CreateTexture(nil, "BACKGROUND", nil, -1)
-border:SetAllPoints()
-border:SetColorTexture(0.35, 0.3, 0.2, 1)
-local background = frame:CreateTexture(nil, "BACKGROUND")
-background:SetPoint("TOPLEFT", 1, -1)
-background:SetPoint("BOTTOMRIGHT", -1, 1)
-background:SetColorTexture(0.05, 0.05, 0.08, 0.95)
+--- Holds the title, texts and title-bar buttons above the skin's art.
+export const overlay = CreateFrame("Frame", nil, frame)
+overlay:SetAllPoints()
+overlay:SetFrameLevel(OVERLAY_LEVEL)
 
-local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-title:SetPoint("TOPLEFT", PADDING, -PADDING)
+local title = overlay:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 title:SetText("QuickCrate")
 
-local closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
-closeButton:SetPoint("TOPRIGHT", 2, 2)
+export const closeButton = CreateFrame("Button", nil, overlay, "UIPanelCloseButton")
 
 --- The receipt count, or why no receipt can be applied.
-export const receiptHeader = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-receiptHeader:SetPoint("TOPLEFT", PADDING, -HEADER_HEIGHT)
+export const receiptHeader = overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 receiptHeader:SetJustifyH("LEFT")
 
 --- Shown when there is nothing to fill.
-export const emptyText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-emptyText:SetPoint("TOPLEFT", PADDING, -HEADER_HEIGHT)
+export const emptyText = overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 emptyText:SetText("No Waylaid Crates in your bags.")
 
 export type Row = {
@@ -59,7 +54,72 @@ export type Row = {
     line: FontString,
     fill: Button,
     receipt: Button,
+    stripe: Texture,
+    divider: Texture,
 }
+
+-- The skin the window is drawn in, and each skin's art once built.
+local applied: Skin = SKINS[1]
+local chromes: { [string]: any[] } = {}
+
+--- The id of the skin the window is currently drawn in.
+export function appliedSkin(): string
+    return applied.id
+end
+
+--- Puts a skin's art on a window, building it on first use, and hides the art of every other skin.
+export function showChrome(host: Frame, layer: Frame, store: { [string]: any[] }, skin: Skin)
+    for id, objects in pairs(store) do
+        for _, o in ipairs(objects) do
+            o:SetShown(id == skin.id)
+        end
+    end
+    if store[skin.id] == nil then
+        store[skin.id] = skin.build(host, layer)
+    end
+end
+
+--- Styles a font string as the skin's title.
+export function styleTitle(text: FontString, skin: Skin)
+    text:SetFontObject(skin.titleFont)
+    local c = skin.titleColor
+    if c ~= nil then
+        text:SetTextColor(c.r, c.g, c.b, c.a)
+        text:SetShadowOffset(0, 0)
+    else
+        text:SetTextColor(1, 0.82, 0, 1)
+        text:SetShadowOffset(1, -1)
+    end
+    text:ClearAllPoints()
+    if skin.titleCentered then
+        text:SetPoint("TOP", 0, skin.titleY)
+    else
+        text:SetPoint("TOPLEFT", skin.side, skin.titleY)
+    end
+end
+
+--- Colours a body text in the skin's ink, or the font's own white when it has none.
+export function ink(text: FontString, skin: Skin)
+    local c: Color? = skin.ink
+    if c ~= nil then
+        text:SetTextColor(c.r, c.g, c.b, c.a)
+        text:SetShadowOffset(0, 0)
+    else
+        text:SetTextColor(1, 1, 1, 1)
+        text:SetShadowOffset(1, -1)
+    end
+end
+
+local function applyChrome(skin: Skin)
+    applied = skin
+    showChrome(frame, overlay, chromes, skin)
+    frame:SetWidth(skin.width)
+    closeButton:ClearAllPoints()
+    closeButton:SetPoint("TOPRIGHT", skin.closeX, skin.closeY)
+    styleTitle(title, skin)
+    ink(receiptHeader, skin)
+    ink(emptyText, skin)
+end
 
 export const rows: Row[] = {}
 
@@ -168,7 +228,15 @@ local function getRow(i: number): Row
         return row
     end
     local f = CreateFrame("Frame", nil, frame)
-    f:SetSize(WIDTH - 2 * PADDING, ROW_HEIGHT)
+    f:SetHeight(ROW_HEIGHT)
+    f:SetFrameLevel(OVERLAY_LEVEL - 10)
+    local stripe = f:CreateTexture(nil, "BACKGROUND")
+    stripe:SetPoint("TOPLEFT", -4, 1)
+    stripe:SetPoint("BOTTOMRIGHT", 4, -1)
+    local divider = f:CreateTexture(nil, "ARTWORK")
+    divider:SetHeight(1)
+    divider:SetPoint("TOPLEFT", 0, 1)
+    divider:SetPoint("TOPRIGHT", 0, 1)
     local icon = f:CreateTexture(nil, "ARTWORK")
     icon:SetSize(28, 28)
     icon:SetPoint("LEFT", 0, 0)
@@ -189,20 +257,23 @@ local function getRow(i: number): Row
     receipt:SetPoint("RIGHT", fill, "LEFT", -4, 0)
     receipt:SetAttribute("item", `item:{RECEIPT_ID}`)
     receipt:SetScript("PreClick", retargetReceipt)
-    row = { frame = f, icon = icon, name = name, line = line, fill = fill, receipt = receipt }
+    row = {
+        frame = f, icon = icon, name = name, line = line, fill = fill, receipt = receipt,
+        stripe = stripe, divider = divider,
+    }
     rows[i] = row
     return row
 end
 
 --- The text under a crate's name: what the next fill uses, or what is missing.
-export function fillLine(crate: CrateRow): string
+export function fillLine(crate: CrateRow, skin: Skin): string
     local b = crate.bundle
     if b ~= nil then
-        return `{GOOD}Fills with {b.count}× {itemName(b.item)}|r`
+        return `{skin.good}Fills with {b.count}× {itemName(b.item)}|r`
     end
     local c = crate.closest
     if c ~= nil then
-        return `{BAD}Need {c.missing} more {itemName(c.item)}|r`
+        return `{skin.bad}Need {c.missing} more {itemName(c.item)}|r`
     end
     return ""
 end
@@ -211,10 +282,35 @@ local function nameWithCount(name: string, count: number): string
     return count > 1 and `{name} ×{count}` or name
 end
 
+--- Places a row inside the skin's room and gives it the skin's decoration.
+local function dressRow(row: Row, index: number, top: number, skin: Skin)
+    row.frame:ClearAllPoints()
+    row.frame:SetPoint("TOPLEFT", skin.side, -(top + (index - 1) * ROW_HEIGHT))
+    row.frame:SetWidth(skin.width - 2 * skin.side)
+    local s = skin.rowStripe
+    row.stripe:SetShown(s ~= nil and index % 2 == 1)
+    if s ~= nil then
+        row.stripe:SetColorTexture(s.r, s.g, s.b, s.a)
+    end
+    local d = skin.rowDivider
+    row.divider:SetShown(d ~= nil and index > 1)
+    if d ~= nil then
+        row.divider:SetColorTexture(d.r, d.g, d.b, d.a)
+    end
+    ink(row.name, skin)
+    -- the line's colour comes from its text; ink skins only drop its shadow
+    if skin.ink ~= nil then
+        row.line:SetShadowOffset(0, 0)
+    else
+        row.line:SetShadowOffset(1, -1)
+    end
+    row.frame:Show()
+end
+
 local function showCrate(row: Row, crate: CrateRow, receipts: number)
     row.icon:SetTexture(C_Item.GetItemIconByID(crate.id))
-    row.name:SetText(nameWithCount(crate.name, crate.count))
-    row.line:SetText(fillLine(crate))
+    row.name:SetText(nameWithCount((crate.name:gsub(NAME_PREFIX, "")), crate.count))
+    row.line:SetText(fillLine(crate, applied))
     local crateItem = `item:{crate.id}`
     local b = crate.bundle
     row.fill:SetAttribute("quickcrate-item", crateItem)
@@ -257,30 +353,31 @@ export function render()
     if InCombatLockdown() then
         return
     end
+    local skin = applied
     local model = scan()
-    local top = HEADER_HEIGHT
+    local top = skin.top
 
     local header = receiptText(model)
     receiptHeader:SetShown(header ~= nil)
     if header ~= nil then
         receiptHeader:SetText(header)
-        top += 18
+        receiptHeader:ClearAllPoints()
+        receiptHeader:SetPoint("TOPLEFT", skin.side, -top)
+        top += HEADER_LINE
     end
 
     local used = 0
     for _, crate in ipairs(model.crates) do
         used += 1
         local row = getRow(used)
+        dressRow(row, used, top, skin)
         showCrate(row, crate, model.receipts)
-        row.frame:SetPoint("TOPLEFT", PADDING, -(top + (used - 1) * ROW_HEIGHT))
-        row.frame:Show()
     end
     for _, item in ipairs(model.manual) do
         used += 1
         local row = getRow(used)
+        dressRow(row, used, top, skin)
         showManual(row, item)
-        row.frame:SetPoint("TOPLEFT", PADDING, -(top + (used - 1) * ROW_HEIGHT))
-        row.frame:Show()
     end
     for i = used + 1, #rows do
         rows[i].frame:Hide()
@@ -288,10 +385,34 @@ export function render()
 
     emptyText:SetShown(used == 0)
     if used == 0 then
-        emptyText:SetPoint("TOPLEFT", PADDING, -top)
+        emptyText:ClearAllPoints()
+        emptyText:SetPoint("TOPLEFT", skin.side, -top)
         used = 1
     end
-    frame:SetHeight(top + used * ROW_HEIGHT + PADDING)
+    frame:SetHeight(math.max(top + used * ROW_HEIGHT + skin.bottom, skin.minHeight))
+end
+
+--- Draws the window in the player's skin. Resizing a window with secure
+--- buttons is blocked in combat, so in combat this waits for combat to end;
+--- of several calls in one fight, only the last applies.
+export function restyle()
+    defer(function()
+        applyChrome(activeSkin())
+        if frame:IsShown() then
+            render()
+        end
+    end, "quickcrate-restyle")
+end
+
+--- Saves a skin as the player's choice and redraws the window in it.
+export function setSkin(id: string)
+    saveSkin(id)
+    restyle()
+end
+
+@onLoad
+local function firstStyle()
+    restyle()
 end
 
 local pendingOpen = false
