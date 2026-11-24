@@ -4,11 +4,15 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
+# Releases run one at a time, in merge order, so two quick merges can't race for a version.
+concurrency:
+  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'release' || github.run_id }}
+  cancel-in-progress: false
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # GitHub releases
+      contents: write # release commits, tags and GitHub releases
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # tags and history for build.version and changelogs
@@ -22,8 +26,24 @@ jobs:
       - run: wowlua check --locked --message-format github
       - run: wowlua test --locked --message-format github
       - run: wowlua build --release --locked
-      - if: startsWith(github.ref, 'refs/tags/')
-        run: wowlua publish --no-test # the tests above already passed
+      # Every merge to main is a release: bump the version, write the changelog
+      # section, commit, tag and push. Pushes made with GITHUB_TOKEN start no
+      # new workflow run, so the release commit doesn't release again.
+      - id: release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --ff-only origin main # a release commit from an earlier run, if any
+          if git describe --exact-match --tags --match 'v*' HEAD > /dev/null 2>&1; then
+            echo "main is already released; an earlier run released this merge with its own"
+            exit 0
+          fi
+          version=$(bash .github/scripts/prepare-release.sh)
+          git push origin HEAD:main "v$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - if: startsWith(github.ref, 'refs/tags/') || steps.release.outputs.version
+        run: wowlua publish --locked --no-test # the tests above already passed
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

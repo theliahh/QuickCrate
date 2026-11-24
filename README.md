@@ -40,17 +40,15 @@ wowlua dev
 
 ## Releasing
 
-GitHub Actions (`.github/workflows/ci.yml`) checks, tests and builds every push to `main` and every pull request. When a `v*` tag is pushed, it also runs `wowlua publish`, which uploads the release to every enabled target in `wowlua.json` under `publish.targets`. The release notes are the section of `CHANGELOG.md` whose heading matches the version.
+GitHub Actions (`.github/workflows/ci.yml`) checks, tests and builds every pull request and every push to `main`. **Every merge to `main` is a full release**, uploaded to every enabled target in `wowlua.json` under `publish.targets` (CurseForge and GitHub). After the tests pass, `.github/scripts/prepare-release.sh` does the following:
 
-1. Set `package.version` in `wowlua.json`, and add a `## <version>` section to `CHANGELOG.md`.
-2. Commit, then tag and push. The tag must match the version, or the build stops:
+- **Version:** if `package.version` has no `v<version>` tag yet, that version is released as it is. Otherwise the patch number goes up by one. To release a minor or major version, set `package.version` to it in the pull request.
+- **Release notes:** the entries under `## Unreleased` in `CHANGELOG.md` become the new version's section. With no entries there, the merged commit's title is the one entry. Add a line under `## Unreleased` in each pull request to write the notes yourself.
+- **Commit and tag:** it commits "Release <version>" to `main`, tags it `v<version>`, pushes both, and publishes.
 
-   ```sh
-   git tag v0.2.0
-   git push origin main v0.2.0
-   ```
+Pull local `main` after a merge to get the release commit.
 
-A tag containing `alpha` or `beta` is uploaded as that release type. Any other tag is a full release.
+A `v*` tag pushed by hand still publishes, for a release outside this flow. The tag must match `package.version`, or the build stops. A tag containing `alpha` or `beta` is uploaded as that release type.
 
 `wowlua publish --dry-run` builds and packages everything and shows what each site would receive, without uploading. The zip goes to `dist/packages/`. It contains only the generated TOC, the bundled Lua and a license notice: no docs, tests or source files.
 
