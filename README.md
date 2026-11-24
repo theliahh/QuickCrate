@@ -56,8 +56,6 @@ A tag containing `alpha` or `beta` is uploaded as that release type. Any other t
 
 ### CurseForge setup
 
-The `curseforge` target is a placeholder and is turned off. To turn it on:
+The `curseforge` target uploads to CurseForge project 1827165. It needs a CurseForge API token, created at <https://legacy.curseforge.com/account/api-tokens> and saved in the GitHub repository's secrets as `CF_API_TOKEN` (Settings → Secrets and variables → Actions).
 
-1. Create the project on CurseForge and copy its project ID from the project page.
-2. In `wowlua.json`, set the target's `project-id` to that number and remove `"enabled": false`.
-3. Create an API token at <https://legacy.curseforge.com/account/api-tokens>, and add it to the GitHub repository's secrets as `CF_API_TOKEN` (Settings → Secrets and variables → Actions).
+The project page's description is kept in `CURSEFORGE.md`, to paste into CurseForge's description editor.

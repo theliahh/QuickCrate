@@ -24,7 +24,7 @@
   "publish": {
     "changelog": "CHANGELOG.md",
     "targets": {
-      "curseforge": { "type": "curseforge", "project-id": 0, "enabled": false },
+      "curseforge": { "type": "curseforge", "project-id": 1827165 },
       "github": { "type": "github", "repository": "theliahh/QuickCrate" }
     }
   }
