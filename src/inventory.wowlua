@@ -4,6 +4,7 @@ import CRATES, RECEIPT_ID, FALLBACK_NAMES from "/data"
 import type Bundle from "/data"
 
 export type Slot = { bag: number, slot: number }
+export type Stack = { bag: number, slot: number, count: number }
 export type Shortfall = { item: number, count: number, missing: number }
 
 export type CrateRow = {
@@ -13,6 +14,10 @@ export type CrateRow = {
     slots: Slot[],
     -- the bundle the next fill uses, nil when the bags cover none
     bundle: Bundle?,
+    -- the stack of the bundle's material that Fill points the game at
+    stack: Stack?,
+    -- the bags hold enough of the material, but no single stack does
+    needsStacking: boolean,
     -- when no bundle is covered: the one closest to complete
     closest: Shortfall?,
 }
@@ -55,6 +60,49 @@ local function coveredBundle(bundles: Bundle[], counts: { [number]: number }): B
     return nil
 end
 
+--- How much one stack must hold for the game to take `count` of the item
+--- from it: the full amount, or a full stack when the amount is more than
+--- one stack holds. Until the client knows the stack size, the full amount.
+export function stackNeed(item: number, count: number): number
+    local info: any = { C_Item.GetItemInfo(item) }
+    local maxStack = info[8]
+    if type(maxStack) == "number" and maxStack > 0 and maxStack < count then
+        return maxStack
+    end
+    return count
+end
+
+--- The smallest stack holding at least `need`; ties go to bag order.
+local function smallestEnough(stacks: Stack[], need: number): Stack?
+    local best: Stack? = nil
+    for _, s in ipairs(stacks) do
+        if s.count >= need and (best == nil or s.count < best.count) then
+            best = s
+        end
+    end
+    return best
+end
+
+--- Every stack of the item in the bags, in bag order.
+export function stacksOf(item: number): Stack[]
+    local stacks: Stack[] = {}
+    for bag = 0, LAST_BAG do
+        for slot = 1, C_Container.GetContainerNumSlots(bag) do
+            local info = C_Container.GetContainerItemInfo(bag, slot)
+            if info ~= nil and info.itemID == item then
+                stacks[#stacks + 1] = { bag = bag, slot = slot, count = info.stackCount ?? 1 }
+            end
+        end
+    end
+    return stacks
+end
+
+--- The stack Fill should point at for `count` of the item, from the bags as
+--- they are now; nil when no stack is big enough.
+export function chooseStack(item: number, count: number): Stack?
+    return smallestEnough(stacksOf(item), stackNeed(item, count))
+end
+
 --- The bundle with the fewest items missing; ties go to game order.
 local function closestBundle(bundles: Bundle[], counts: { [number]: number }): Shortfall?
     local best: Shortfall? = nil
@@ -70,6 +118,7 @@ end
 export function scan(): Model
     local counts: { [number]: number } = {}
     local slotsByID: { [number]: Slot[] } = {}
+    local stacksByID: { [number]: Stack[] } = {}
     local receiptSlots: Slot[] = {}
 
     for bag = 0, LAST_BAG do
@@ -77,13 +126,18 @@ export function scan(): Model
             local info = C_Container.GetContainerItemInfo(bag, slot)
             if info ~= nil and info.itemID ~= nil then
                 local id = info.itemID
-                counts[id] = (counts[id] ?? 0) + (info.stackCount ?? 1)
+                local count = info.stackCount ?? 1
+                counts[id] = (counts[id] ?? 0) + count
                 local list = slotsByID[id]
-                if list == nil then
+                local stacks = stacksByID[id]
+                if list == nil or stacks == nil then
                     list = {}
+                    stacks = {}
                     slotsByID[id] = list
+                    stacksByID[id] = stacks
                 end
                 list[#list + 1] = { bag = bag, slot = slot }
+                stacks[#stacks + 1] = { bag = bag, slot = slot, count = count }
                 if id == RECEIPT_ID then
                     receiptSlots[#receiptSlots + 1] = { bag = bag, slot = slot }
                 end
@@ -97,12 +151,18 @@ export function scan(): Model
         if slots ~= nil then
             local bundles = CRATES[id].bundles
             local bundle = coveredBundle(bundles, counts)
+            local stack: Stack? = nil
+            if bundle ~= nil then
+                stack = smallestEnough(stacksByID[bundle.item] ?? {}, stackNeed(bundle.item, bundle.count))
+            end
             crates[#crates + 1] = {
                 id = id,
                 name = itemName(id),
                 count = counts[id],
                 slots = slots,
                 bundle = bundle,
+                stack = stack,
+                needsStacking = bundle ~= nil and stack == nil,
                 closest = bundle == nil and closestBundle(bundles, counts) or nil,
             }
         end

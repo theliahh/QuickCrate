@@ -1,13 +1,15 @@
 import test, beforeEach, expect from "wowlua:test"
 import * as mock from "wowlua:mock"
-import scan from "/inventory"
+import scan, chooseStack from "/inventory"
 import CRATES from "/data"
 
 const APPRENTICE_ORE = 248683
 const APPRENTICE_TEXTILES = 248684
+const EXPERT_PARTS = 248710
 const COPPER_ORE = 2770
 const TIN_ORE = 2771
 const LINEN_CLOTH = 2589
+const IRON_STRUT = 4387
 const RECEIPT = 262902
 
 @beforeEach
@@ -17,6 +19,8 @@ local function emptyBags()
     mock.defineItem(COPPER_ORE, { name = "Copper Ore", stackCount = 20 })
     mock.defineItem(TIN_ORE, { name = "Tin Ore", stackCount = 20 })
     mock.defineItem(LINEN_CLOTH, { name = "Linen Cloth", stackCount = 20 })
+    mock.defineItem(EXPERT_PARTS, { name = "Waylaid Crate: Expert Parts" })
+    mock.defineItem(IRON_STRUT, { name = "Iron Strut", stackCount = 20 })
     mock.defineItem(RECEIPT, { name = "Forged Delivery Receipt" })
     for bag = 0, 5 do
         mock.setBag(bag, { slots = 16, items = {} })
@@ -109,6 +113,99 @@ local function empty()
     expect(#model.crates).toBe(0)
     expect(#model.manual).toBe(0)
     expect(model.receipts).toBe(0)
+end
+
+--- The Expert Parts row with Iron Struts in bag 0 at slots 2, 3, ... in the given counts.
+local function strutRow(counts: number[])
+    local items: { [number]: any } = { [1] = EXPERT_PARTS }
+    for i, count in ipairs(counts) do
+        items[i + 1] = { id = IRON_STRUT, count = count }
+    end
+    mock.setBag(0, { slots = 16, items = items })
+    return scan().crates[1]
+end
+
+@test("a small leftover stack is passed over for one big enough")
+local function skipsSmallStack()
+    local row = strutRow({ 4, 20 })
+    expect(row.bundle?.item).toBe(IRON_STRUT)
+    expect(row.stack?.slot).toBe(3)
+    expect(row.needsStacking).toBe(false)
+end
+
+@test("the smallest stack that is big enough is chosen")
+local function smallestEnough()
+    expect(strutRow({ 20, 12 }).stack?.slot).toBe(3)
+end
+
+@test("between equal stacks, the first in bag order is chosen")
+local function firstOfEqual()
+    expect(strutRow({ 8, 8 }).stack?.slot).toBe(2)
+end
+
+@test("enough in total but no stack big enough needs stacking")
+local function needsStacking()
+    local row = strutRow({ 4, 6 })
+    expect(row.bundle?.item).toBe(IRON_STRUT)
+    expect(row.stack).toBeNil()
+    expect(row.needsStacking).toBe(true)
+end
+
+@test("a bundle bigger than a stack is ready with one full stack")
+local function fullStackIsEnough()
+    mock.setBag(0, { slots = 16, items = {
+        [1] = APPRENTICE_TEXTILES,
+        [2] = { id = LINEN_CLOTH, count = 20 },
+        [3] = { id = LINEN_CLOTH, count = 20 },
+    } })
+    local row = scan().crates[1]
+    expect(row.bundle?.item).toBe(LINEN_CLOTH)
+    expect(row.stack?.slot).toBe(2)
+    expect(row.needsStacking).toBe(false)
+end
+
+@test("a bundle bigger than a stack with no full stack needs stacking")
+local function noFullStack()
+    mock.setBag(0, { slots = 16, items = {
+        [1] = APPRENTICE_TEXTILES,
+        [2] = { id = LINEN_CLOTH, count = 15 },
+        [3] = { id = LINEN_CLOTH, count = 15 },
+        [4] = { id = LINEN_CLOTH, count = 10 },
+    } })
+    local row = scan().crates[1]
+    expect(row.stack).toBeNil()
+    expect(row.needsStacking).toBe(true)
+end
+
+@test("a bundle the bags can't cover has no stack and needs no stacking")
+local function uncovered()
+    local row = strutRow({ 3, 2 })
+    expect(row.bundle).toBeNil()
+    expect(row.stack).toBeNil()
+    expect(row.needsStacking).toBe(false)
+    expect(row.closest?.missing).toBe(3)
+end
+
+@test("stacks in every bag are considered, the reagent bag included")
+local function stacksAcrossBags()
+    mock.setBag(0, { slots = 16, items = { [1] = EXPERT_PARTS, [2] = { id = IRON_STRUT, count = 4 } } })
+    mock.setBag(5, { slots = 16, items = { [9] = { id = IRON_STRUT, count = 10 } } })
+    local row = scan().crates[1]
+    expect(row.stack?.bag).toBe(5)
+    expect(row.stack?.slot).toBe(9)
+end
+
+@test("the stack can be chosen again from the bags as they are now")
+local function chooseAgain()
+    strutRow({ 4, 20 })
+    mock.setBag(0, { slots = 16, items = {
+        [1] = EXPERT_PARTS,
+        [2] = { id = IRON_STRUT, count = 4 },
+        [11] = { id = IRON_STRUT, count = 20 },
+    } })
+    expect(chooseStack(IRON_STRUT, 8)?.slot).toBe(11)
+    mock.setBag(0, { slots = 16, items = { [1] = EXPERT_PARTS, [2] = { id = IRON_STRUT, count = 4 } } })
+    expect(chooseStack(IRON_STRUT, 8)).toBeNil()
 end
 
 @test("the crate table has all thirty crates")
