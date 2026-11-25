@@ -14,7 +14,7 @@ local running = false
 local item = 0
 local need = 0
 local finished: () -> () = function() end
--- bumped on every move, so a stale timeout can't end a later move
+-- bumped on every new deadline, so a stale timeout can't end a later move
 local moveToken = 0
 
 local events = CreateFrame("Frame")
@@ -26,6 +26,18 @@ local function stop()
         ClearCursor()
     end
     finished()
+end
+
+--- Ends the merge if the bags show no progress within the timeout. Each call
+--- replaces the previous deadline.
+local function armTimeout()
+    moveToken += 1
+    local token = moveToken
+    C_Timer.After(MOVE_TIMEOUT, function()
+        if running and token == moveToken then
+            stop()
+        end
+    end)
 end
 
 local function isLocked(s: Stack): boolean
@@ -84,13 +96,7 @@ local function step()
         stop()
         return
     end
-    moveToken += 1
-    local token = moveToken
-    C_Timer.After(MOVE_TIMEOUT, function()
-        if running and token == moveToken then
-            stop()
-        end
-    end)
+    armTimeout()
 end
 
 events:SetScript("OnEvent", step)
@@ -113,6 +119,8 @@ export function startStacking(id: number, amount: number, onDone: () -> ()): boo
     need = stackNeed(id, amount)
     finished = onDone
     events:RegisterEvent("BAG_UPDATE_DELAYED")
+    -- also covers stacks still locked from an earlier move, when no move runs yet
+    armTimeout()
     step()
     return running
 end

@@ -153,6 +153,25 @@ local function timeout()
     expect(rows[1].fill:IsEnabled()).toBe(true)
 end
 
+@test("stacks still locked from an earlier move don't leave Stack stuck")
+local function lockedAtStart()
+    struts({ 4, 6 })
+    local real = C_Container.GetContainerItemInfo
+    -- the stacks stay locked, and no bag update ever arrives
+    mock.stub(C_Container, "GetContainerItemInfo", function(bag: number, slot: number): any
+        local info: any = real(bag, slot)
+        if info ~= nil then
+            info.isLocked = true
+        end
+        return info
+    end)
+    mock.click(rows[1].fill)
+    expect(rows[1].fill:IsEnabled()).toBe(false)
+    settle()
+    expect(rows[1].fill:IsEnabled()).toBe(true)
+    expect(rows[1].fill:GetText()).toBe("Stack")
+end
+
 @test("a second click while a merge runs starts nothing more")
 local function secondClick()
     struts({ 4, 6 })
