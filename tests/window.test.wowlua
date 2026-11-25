@@ -40,13 +40,57 @@ local function needMore()
     expect(rows[1].fill:IsEnabled()).toBe(false)
 end
 
-@test("Fill uses the crate by item ID, never a bag slot")
+@test("Fill uses the crate by item ID and points at the material's bag slot")
 local function fillByID()
     mock.setBag(1, { slots = 16, items = { [4] = APPRENTICE_ORE } })
+    mock.setBag(2, { slots = 16, items = { [7] = { id = TIN_ORE, count = 20 } } })
     mock.slash("/qc")
     expect(rows[1].fill:GetAttribute("type")).toBe("item")
     expect(rows[1].fill:GetAttribute("item")).toBe("item:248683")
+    expect(rows[1].fill:GetAttribute("target-bag")).toBe(2)
+    expect(rows[1].fill:GetAttribute("target-slot")).toBe(7)
+end
+
+@test("Fill passes over a leftover stack that is too small")
+local function fillSkipsSmallStack()
+    mock.setBag(0, { slots = 16, items = {
+        [1] = APPRENTICE_ORE,
+        [2] = { id = TIN_ORE, count = 4 },
+        [3] = { id = TIN_ORE, count = 20 },
+    } })
+    mock.slash("/qc")
+    local fill = rows[1].fill
+    expect(fill:GetAttribute("item")).toBe("item:248683")
+    expect(fill:GetAttribute("target-bag")).toBe(0)
+    expect(fill:GetAttribute("target-slot")).toBe(3)
+end
+
+@test("a Fill click follows the material to where it is now")
+local function fillRetargets()
+    mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_ORE, [3] = { id = TIN_ORE, count = 20 } } })
+    mock.slash("/qc")
+    -- move the material without letting the window redraw
+    frame:Hide()
+    mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_ORE } })
+    mock.setBag(3, { slots = 16, items = { [9] = { id = TIN_ORE, count = 20 } } })
+    frame:Show()
+    mock.click(rows[1].fill)
+    expect(rows[1].fill:GetAttribute("target-bag")).toBe(3)
+    expect(rows[1].fill:GetAttribute("target-slot")).toBe(9)
+    expect(rows[1].fill:GetAttribute("item")).toBe("item:248683")
+end
+
+@test("a Fill click with no stack big enough any more falls back to the material's name")
+local function fillFallsBack()
+    mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_ORE, [3] = { id = TIN_ORE, count = 20 } } })
+    mock.slash("/qc")
+    frame:Hide()
+    mock.setBag(0, { slots = 16, items = { [1] = APPRENTICE_ORE, [3] = { id = TIN_ORE, count = 5 } } })
+    frame:Show()
+    mock.click(rows[1].fill)
     expect(rows[1].fill:GetAttribute("target-bag")).toBeNil()
+    expect(rows[1].fill:GetAttribute("target-slot")).toBeNil()
+    expect(rows[1].fill:GetAttribute("target-item")).toBe("Tin Ore")
 end
 
 @test("one Fill click uses the crate and targets the bundle's material")
@@ -73,6 +117,7 @@ local function secondClick()
     expect(fill:GetText()).toBe("Put in")
     expect(fill:GetAttribute("item")).toBeNil()
     expect(fill:GetAttribute("target-item")).toBe("Tin Ore")
+    expect(fill:GetAttribute("target-slot")).toBe(2)
 
     canTarget = false                    -- the material went in, or the player cancelled
     mock.nextFrame()

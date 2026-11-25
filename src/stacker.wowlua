@@ -1,0 +1,126 @@
+-- Merges a material's stacks until one is big enough to fill a crate from.
+-- The game takes a fill's material from the one stack it is pointed at, so
+-- 4 + 6 Iron Struts can't fill an 8-strut crate until they share a stack.
+-- One move at a time: split the amount still needed off a source stack, drop
+-- it on the biggest stack, then wait for the bags to report the change before
+-- the next move, since moved items stay locked until the server answers.
+import stacksOf, stackNeed, maxStackOf from "/inventory"
+import type Stack from "/inventory"
+
+-- how long one move may take to show up in the bags
+const MOVE_TIMEOUT = 3
+
+local running = false
+local item = 0
+local need = 0
+local finished: () -> () = function() end
+-- bumped on every new deadline, so a stale timeout can't end a later move
+local moveToken = 0
+
+local events = CreateFrame("Frame")
+
+local function stop()
+    running = false
+    events:UnregisterEvent("BAG_UPDATE_DELAYED")
+    if CursorHasItem() then
+        ClearCursor()
+    end
+    finished()
+end
+
+--- Ends the merge if the bags show no progress within the timeout. Each call
+--- replaces the previous deadline.
+local function armTimeout()
+    moveToken += 1
+    local token = moveToken
+    C_Timer.After(MOVE_TIMEOUT, function()
+        if running and token == moveToken then
+            stop()
+        end
+    end)
+end
+
+local function isLocked(s: Stack): boolean
+    local info = C_Container.GetContainerItemInfo(s.bag, s.slot)
+    return info == nil or info.isLocked == true
+end
+
+--- Makes the next move, or ends the merge when one stack is big enough, the
+--- biggest stack is full, or nothing is left to move.
+local function step()
+    if not running then
+        return
+    end
+    if InCombatLockdown() then
+        stop()
+        return
+    end
+    local stacks = stacksOf(item)
+    local dest: Stack? = nil
+    for _, s in ipairs(stacks) do
+        if dest == nil or s.count > dest.count then
+            dest = s
+        end
+    end
+    if dest == nil or dest.count >= need then
+        stop()
+        return
+    end
+    local maxStack = maxStackOf(item)
+    local room = maxStack > 0 and maxStack - dest.count or need - dest.count
+    if room <= 0 then
+        stop()
+        return
+    end
+    local source: Stack? = nil
+    for _, s in ipairs(stacks) do
+        if s ~= dest and (source == nil or s.count > source.count) then
+            source = s
+        end
+    end
+    if source == nil then
+        stop()
+        return
+    end
+    if isLocked(source) or isLocked(dest) then
+        return -- the last move is still landing; the next bag update retries
+    end
+    local amount = math.min(need - dest.count, source.count, room)
+    if amount >= source.count then
+        C_Container.PickupContainerItem(source.bag, source.slot)
+    else
+        C_Container.SplitContainerItem(source.bag, source.slot, amount)
+    end
+    C_Container.PickupContainerItem(dest.bag, dest.slot)
+    if CursorHasItem() then
+        stop()
+        return
+    end
+    armTimeout()
+end
+
+events:SetScript("OnEvent", step)
+
+--- Whether a merge is running now.
+export function isStacking(): boolean
+    return running
+end
+
+--- Starts merging the item's stacks until one holds enough to fill `amount`
+--- from. `onDone` runs when the merge ends, however it ends. Refuses, and
+--- returns false, in combat, while another merge runs, or with anything on
+--- the cursor, where a move could drop the player's own item.
+export function startStacking(id: number, amount: number, onDone: () -> ()): boolean
+    if running or InCombatLockdown() or CursorHasItem() then
+        return false
+    end
+    running = true
+    item = id
+    need = stackNeed(id, amount)
+    finished = onDone
+    events:RegisterEvent("BAG_UPDATE_DELAYED")
+    -- also covers stacks still locked from an earlier move, when no move runs yet
+    armTimeout()
+    step()
+    return running
+end
