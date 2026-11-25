@@ -5,6 +5,7 @@ import print from "wowlua:log"
 import defer, onCombatChange from "wowlua:combat"
 import RECEIPT_ID from "/data"
 import scan, itemName, chooseStack from "/inventory"
+import startStacking, isStacking from "/stacker"
 import type CrateRow, ManualRow, Model, Stack from "/inventory"
 import SKINS, activeSkin, saveSkin from "/skins"
 import type Skin, Color from "/skins"
@@ -200,6 +201,26 @@ local function rememberFillClick(button: Button)
     pendingAt = GetTime()
 end
 
+-- set to render once it is defined below
+local redraw: () -> () = function() end
+
+-- When the bags hold enough of the material but no stack is big enough, the
+-- button reads Stack instead: it uses no item, and its click merges the
+-- material's stacks so the next click can Fill.
+local function onFillClick(button: Button)
+    if button:GetAttribute("quickcrate-stack") ~= true then
+        rememberFillClick(button)
+        return
+    end
+    local item = button:GetAttribute("quickcrate-material")
+    local amount = button:GetAttribute("quickcrate-amount")
+    if type(item) == "number" and type(amount) == "number" then
+        if startStacking(item, amount, function() redraw() end) then
+            button:Disable()
+        end
+    end
+end
+
 local function arm(button: Button)
     armedFill = button
     pendingFill = nil
@@ -276,7 +297,7 @@ local function getRow(i: number): Row
     local fill = secureButton(f, "Fill")
     fill:SetPoint("RIGHT", f, "RIGHT", 0, 0)
     fill:SetScript("PreClick", retargetFill)
-    fill:SetScript("PostClick", rememberFillClick)
+    fill:SetScript("PostClick", onFillClick)
     local receipt = secureButton(f, "Receipt")
     receipt:SetPoint("RIGHT", fill, "LEFT", -4, 0)
     receipt:SetAttribute("item", `item:{RECEIPT_ID}`)
@@ -342,13 +363,17 @@ local function showCrate(row: Row, crate: CrateRow, receipts: number)
     row.fill:SetAttribute("quickcrate-material", b?.item)
     row.fill:SetAttribute("quickcrate-amount", b?.count)
     pointAt(row.fill, crate.stack)
+    row.fill:SetAttribute("quickcrate-stack", crate.needsStacking)
     if row.fill == armedFill then
         row.fill:SetAttribute("item", nil)
+    elseif crate.needsStacking then
+        row.fill:SetAttribute("item", nil)
+        row.fill:SetText("Stack")
     else
         row.fill:SetAttribute("item", crateItem)
         row.fill:SetText("Fill")
     end
-    row.fill:SetEnabled(b ~= nil)
+    row.fill:SetEnabled(b ~= nil and not isStacking())
     row.fill:Show()
     local s = crate.slots[1]
     row.receipt:SetAttribute("quickcrate-crate", crate.id)
@@ -418,6 +443,7 @@ export function render()
     end
     frame:SetHeight(math.max(top + used * ROW_HEIGHT + skin.bottom, skin.minHeight))
 end
+redraw = render
 
 --- Draws the window in the player's skin. Resizing a window with secure
 --- buttons is blocked in combat, so in combat this waits for combat to end;

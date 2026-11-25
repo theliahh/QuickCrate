@@ -1,0 +1,184 @@
+-- The Stack button: when the bags hold enough of a bundle's material but no
+-- single stack is big enough, one click merges the material's stacks.
+import test, beforeEach, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+import frame, rows from "/window"
+
+const EXPERT_PARTS = 248710
+const APPRENTICE_TEXTILES = 248684
+const IRON_STRUT = 4387
+const LINEN_CLOTH = 2589
+const HEARTHSTONE = 6948
+
+@beforeEach
+local function setup()
+    mock.defineItem(EXPERT_PARTS, { name = "Waylaid Crate: Expert Parts" })
+    mock.defineItem(APPRENTICE_TEXTILES, { name = "Waylaid Crate: Apprentice Textiles" })
+    mock.defineItem(IRON_STRUT, { name = "Iron Strut", stackCount = 20 })
+    mock.defineItem(LINEN_CLOTH, { name = "Linen Cloth", stackCount = 20 })
+    mock.defineItem(HEARTHSTONE, { name = "Hearthstone" })
+    ClearCursor()
+    for bag = 0, 5 do
+        mock.setBag(bag, { slots = 16, items = {} })
+    end
+    if frame:IsShown() then
+        mock.slash("/qc")
+    end
+end
+
+--- The counts of the item's stacks in bag 0, slot by slot.
+local function countsIn(item: number): { [number]: number }
+    local counts: { [number]: number } = {}
+    for slot = 1, C_Container.GetContainerNumSlots(0) do
+        local info = C_Container.GetContainerItemInfo(0, slot)
+        if info ~= nil and info.itemID == item then
+            counts[slot] = info.stackCount
+        end
+    end
+    return counts
+end
+
+local function biggest(item: number): number
+    local best = 0
+    for _, n in pairs(countsIn(item)) do
+        best = math.max(best, n)
+    end
+    return best
+end
+
+--- Lets the merge's moves land, one bag update at a time.
+local function settle()
+    for _ = 1, 10 do
+        mock.waitSeconds(0.5)
+    end
+end
+
+local function struts(counts: number[])
+    local items: { [number]: any } = { [1] = EXPERT_PARTS }
+    for i, count in ipairs(counts) do
+        items[i + 1] = { id = IRON_STRUT, count = count }
+    end
+    mock.setBag(0, { slots = 16, items = items })
+    mock.slash("/qc")
+end
+
+@test("too-small stacks show Stack, and one click makes a stack big enough to Fill")
+local function stacksThenFills()
+    struts({ 4, 6 })
+    local fill = rows[1].fill
+    expect(fill:GetText()).toBe("Stack")
+    expect(fill:GetAttribute("item")).toBeNil()
+    mock.click(fill)
+    settle()
+    expect(biggest(IRON_STRUT) >= 8).toBe(true)
+    expect(fill:GetText()).toBe("Fill")
+    expect(fill:GetAttribute("item")).toBe("item:248710")
+    expect(GetCursorInfo()).toBeNil()
+end
+
+@test("a merge that needs two moves waits for the first to land")
+local function twoMoves()
+    struts({ 3, 3, 3 })
+    mock.click(rows[1].fill)
+    settle()
+    expect(biggest(IRON_STRUT) >= 8).toBe(true)
+    expect(rows[1].fill:GetText()).toBe("Fill")
+end
+
+@test("a bundle bigger than a stack merges only up to one full stack")
+local function upToFullStack()
+    mock.setBag(0, { slots = 16, items = {
+        [1] = APPRENTICE_TEXTILES,
+        [2] = { id = LINEN_CLOTH, count = 15 },
+        [3] = { id = LINEN_CLOTH, count = 15 },
+        [4] = { id = LINEN_CLOTH, count = 10 },
+    } })
+    mock.slash("/qc")
+    expect(rows[1].fill:GetText()).toBe("Stack")
+    mock.click(rows[1].fill)
+    settle()
+    expect(biggest(LINEN_CLOTH)).toBe(20)
+    local total = 0
+    for _, n in pairs(countsIn(LINEN_CLOTH)) do
+        total += n
+    end
+    expect(total).toBe(40)
+    expect(rows[1].fill:GetText()).toBe("Fill")
+end
+
+@test("a merge still finishes when a split stack's data arrives late")
+local function lateData()
+    mock.setItemDataDelay(1)
+    struts({ 4, 6 })
+    mock.click(rows[1].fill)
+    settle()
+    mock.setItemDataDelay(nil)
+    expect(biggest(IRON_STRUT) >= 8).toBe(true)
+    expect(rows[1].fill:GetText()).toBe("Fill")
+end
+
+@test("with an item on the cursor, Stack moves nothing and leaves the item there")
+local function cursorBusy()
+    mock.setBag(1, { slots = 16, items = { [1] = HEARTHSTONE } })
+    struts({ 4, 6 })
+    C_Container.PickupContainerItem(1, 1)
+    mock.click(rows[1].fill)
+    settle()
+    expect(countsIn(IRON_STRUT)).toEqual({ [2] = 4, [3] = 6 })
+    local kind, id = GetCursorInfo()
+    expect(kind).toBe("item")
+    expect(id).toBe(HEARTHSTONE)
+    ClearCursor()
+end
+
+@test("in combat, Stack does nothing")
+local function inCombat()
+    struts({ 4, 6 })
+    mock.player:enterCombat()
+    mock.click(rows[1].fill)
+    settle()
+    mock.player:leaveCombat()
+    expect(countsIn(IRON_STRUT)).toEqual({ [2] = 4, [3] = 6 })
+end
+
+@test("a move that never lands times out with an empty cursor and a redrawn row")
+local function timeout()
+    struts({ 4, 6 })
+    -- the drop leaves the cursor empty, but the bags never report a change
+    mock.stub(C_Container, "PickupContainerItem", function() ClearCursor() end)
+    mock.click(rows[1].fill)
+    settle()
+    expect(GetCursorInfo()).toBeNil()
+    expect(rows[1].fill:GetText()).toBe("Stack")
+    expect(rows[1].fill:IsEnabled()).toBe(true)
+end
+
+@test("a second click while a merge runs starts nothing more")
+local function secondClick()
+    struts({ 4, 6 })
+    mock.click(rows[1].fill)
+    expect(rows[1].fill:IsEnabled()).toBe(false)
+    mock.click(rows[1].fill)
+    settle()
+    local total = 0
+    for _, n in pairs(countsIn(IRON_STRUT)) do
+        total += n
+    end
+    expect(total).toBe(10)
+    expect(biggest(IRON_STRUT) >= 8).toBe(true)
+end
+
+@test("only the material moves: other items keep their slots")
+local function onlyMaterial()
+    mock.setBag(0, { slots = 16, items = {
+        [1] = EXPERT_PARTS,
+        [2] = { id = IRON_STRUT, count = 4 },
+        [3] = HEARTHSTONE,
+        [4] = { id = IRON_STRUT, count = 6 },
+    } })
+    mock.slash("/qc")
+    mock.click(rows[1].fill)
+    settle()
+    expect(C_Container.GetContainerItemInfo(0, 3)?.itemID).toBe(HEARTHSTONE)
+    expect(C_Container.GetContainerItemInfo(0, 1)?.itemID).toBe(EXPERT_PARTS)
+end
