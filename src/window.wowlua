@@ -171,15 +171,25 @@ local function pointAt(button: Button, stack: Stack?)
     button:SetAttribute("target-slot", stack?.slot)
 end
 
+--- The material and amount of the bundle a Fill button's row uses, or nil
+--- when the bags cover no bundle.
+local function bundleOf(button: Button): (number?, number?)
+    local item = button:GetAttribute("quickcrate-material")
+    local amount = button:GetAttribute("quickcrate-amount")
+    if type(item) == "number" and type(amount) == "number" then
+        return item, amount
+    end
+    return nil, nil
+end
+
 --- Re-picks a Fill button's stack from the bags as they are now, in case the
 --- material moved or was used since the window drew.
 local function retargetFill(button: Button)
     if InCombatLockdown() then
         return
     end
-    local item = button:GetAttribute("quickcrate-material")
-    local amount = button:GetAttribute("quickcrate-amount")
-    if type(item) == "number" and type(amount) == "number" then
+    local item, amount = bundleOf(button)
+    if item ~= nil and amount ~= nil then
         pointAt(button, chooseStack(item, amount))
     end
 end
@@ -212,12 +222,9 @@ local function onFillClick(button: Button)
         rememberFillClick(button)
         return
     end
-    local item = button:GetAttribute("quickcrate-material")
-    local amount = button:GetAttribute("quickcrate-amount")
-    if type(item) == "number" and type(amount) == "number" then
-        if startStacking(item, amount, function() redraw() end) then
-            button:Disable()
-        end
+    local item, amount = bundleOf(button)
+    if item ~= nil and amount ~= nil and startStacking(item, amount, function() redraw() end) then
+        button:Disable()
     end
 end
 

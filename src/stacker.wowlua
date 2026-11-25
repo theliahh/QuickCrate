@@ -4,7 +4,7 @@
 -- One move at a time: split the amount still needed off a source stack, drop
 -- it on the biggest stack, then wait for the bags to report the change before
 -- the next move, since moved items stay locked until the server answers.
-import stacksOf, stackNeed from "/inventory"
+import stacksOf, stackNeed, maxStackOf from "/inventory"
 import type Stack from "/inventory"
 
 -- how long one move may take to show up in the bags
@@ -26,15 +26,6 @@ local function stop()
         ClearCursor()
     end
     finished()
-end
-
-local function maxStackOf(id: number): number
-    local info: any = { C_Item.GetItemInfo(id) }
-    local maxStack = info[8]
-    if type(maxStack) == "number" and maxStack > 0 then
-        return maxStack
-    end
-    return 0
 end
 
 local function isLocked(s: Stack): boolean

@@ -60,13 +60,22 @@ local function coveredBundle(bundles: Bundle[], counts: { [number]: number }): B
     return nil
 end
 
+--- How many of the item one bag slot holds; 0 until the client knows.
+export function maxStackOf(item: number): number
+    local info: any = { C_Item.GetItemInfo(item) }
+    local maxStack = info[8]
+    if type(maxStack) == "number" and maxStack > 0 then
+        return maxStack
+    end
+    return 0
+end
+
 --- How much one stack must hold for the game to take `count` of the item
 --- from it: the full amount, or a full stack when the amount is more than
 --- one stack holds. Until the client knows the stack size, the full amount.
 export function stackNeed(item: number, count: number): number
-    local info: any = { C_Item.GetItemInfo(item) }
-    local maxStack = info[8]
-    if type(maxStack) == "number" and maxStack > 0 and maxStack < count then
+    local maxStack = maxStackOf(item)
+    if maxStack > 0 and maxStack < count then
         return maxStack
     end
     return count
@@ -117,7 +126,6 @@ end
 
 export function scan(): Model
     local counts: { [number]: number } = {}
-    local slotsByID: { [number]: Slot[] } = {}
     local stacksByID: { [number]: Stack[] } = {}
     local receiptSlots: Slot[] = {}
 
@@ -128,15 +136,11 @@ export function scan(): Model
                 local id = info.itemID
                 local count = info.stackCount ?? 1
                 counts[id] = (counts[id] ?? 0) + count
-                local list = slotsByID[id]
                 local stacks = stacksByID[id]
-                if list == nil or stacks == nil then
-                    list = {}
+                if stacks == nil then
                     stacks = {}
-                    slotsByID[id] = list
                     stacksByID[id] = stacks
                 end
-                list[#list + 1] = { bag = bag, slot = slot }
                 stacks[#stacks + 1] = { bag = bag, slot = slot, count = count }
                 if id == RECEIPT_ID then
                     receiptSlots[#receiptSlots + 1] = { bag = bag, slot = slot }
@@ -147,7 +151,7 @@ export function scan(): Model
 
     local crates: CrateRow[] = {}
     for _, id in ipairs(sortedCrateIDs) do
-        local slots = slotsByID[id]
+        local slots = stacksByID[id]
         if slots ~= nil then
             local bundles = CRATES[id].bundles
             local bundle = coveredBundle(bundles, counts)
@@ -169,7 +173,7 @@ export function scan(): Model
     end
 
     local manual: ManualRow[] = {}
-    for id, _ in pairs(slotsByID) do
+    for id, _ in pairs(stacksByID) do
         if CRATES[id] == nil and id ~= RECEIPT_ID then
             local name = itemName(id)
             if name:sub(1, 7) == "Waylaid" then
