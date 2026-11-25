@@ -18,6 +18,7 @@ QuickCrate opens a small window listing every Waylaid Crate in your bags. For ea
 - Right-click a Waylaid Crate or a Forged Delivery Receipt in your bags, and the window opens by itself.
 - Or type **/qc** (or **/quickcrate**) to open and close it.
 - Click **Fill** on a crate row to fill that crate. If the crate takes a moment before asking for the material, the button changes to **Put in**: click it once more to finish.
+- If you have enough of a material but only in small stacks, for example 4 and 6 Iron Struts for a crate that takes 8, the button reads **Stack**. Click it to combine them, then click **Fill**.
 - Click **Receipt** on a crate row to apply a Forged Delivery Receipt to that crate.
 - Crates QuickCrate doesn't recognise are listed as **Fill by hand**.
 - Drag the window to move it. It remembers where you left it.
